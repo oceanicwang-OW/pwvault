@@ -29,7 +29,8 @@
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy 2>&1 | Select-String -Pattern \"warning\" -Context 0,6 | Select-Object -First 3)",
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy --all-targets 2>&1 | Select-Object -Last 1; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" fmt; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result\" | Select-Object -First 1)",
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 20)",
-      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result|FAILED|error\" | Select-Object -First 6)"
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result|FAILED|error\" | Select-Object -First 6)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result|FAILED|^error\" | Select-Object -First 8)"
     ]
   }
 }
