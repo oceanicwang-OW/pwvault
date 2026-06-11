@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'task/**']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.44.1
+
+jobs:
+  windows:
+    name: Windows desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core_crypto
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: cargo test
+        run: cargo test --manifest-path core_crypto/Cargo.toml
+      - name: cargo build (dylib for flutter test)
+        run: cargo build --manifest-path core_crypto/Cargo.toml
+      - name: flutter pub get
+        run: flutter pub get
+        working-directory: app
+      - name: flutter analyze
+        run: flutter analyze
+        working-directory: app
+      - name: flutter test
+        run: flutter test
+        working-directory: app
+      - name: flutter build windows
+        run: flutter build windows --debug
+        working-directory: app
+
+  macos:
+    name: macOS desktop
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core_crypto
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: cargo test
+        run: cargo test --manifest-path core_crypto/Cargo.toml
+      - name: cargo build (dylib for flutter test)
+        run: cargo build --manifest-path core_crypto/Cargo.toml
+      - name: flutter pub get
+        run: flutter pub get
+        working-directory: app
+      - name: flutter test
+        run: flutter test
+        working-directory: app
+      - name: flutter build macos
+        run: flutter build macos --debug
+        working-directory: app
+
+  ios-simulator:
+    name: iOS simulator
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core_crypto
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: flutter pub get
+        run: flutter pub get
+        working-directory: app
+      - name: flutter build ios (simulator, no codesign)
+        run: flutter build ios --simulator
+        working-directory: app
