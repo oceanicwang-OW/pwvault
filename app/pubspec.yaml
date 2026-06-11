@@ -10,7 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_riverpod: ^3.3.2
+  flutter_rust_bridge: 2.12.0
   go_router: ^17.3.0
+  rust_lib_pwvault:
+    path: rust_builder
 
 dev_dependencies:
   flutter_test:

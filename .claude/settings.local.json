@@ -11,7 +11,17 @@
       "PowerShell(Get-Content \"C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--claude-code-private-key-management\\\\727a4cd8-5d54-429e-9398-3634b2369366\\\\tasks\\\\bd1ydxcw6.output\" -Tail 2; & G:\\\\flutter\\\\bin\\\\flutter.bat --version)",
       "PowerShell(Out-Null *)",
       "PowerShell($dirs = \"lib\\\\features\\\\list\",\"lib\\\\features\\\\detail\",\"lib\\\\features\\\\edit\",\"lib\\\\features\\\\settings\",\"lib\\\\features\\\\sync\",\"lib\\\\services\",\"lib\\\\bridge\"; foreach \\($d in $dirs\\) { New-Item -ItemType Directory -Force \"G:\\\\claude_code\\\\private_key_management\\\\app\\\\$d\" | Out-Null; New-Item -ItemType File -Path \"G:\\\\claude_code\\\\private_key_management\\\\app\\\\$d\\\\.gitkeep\" -Force | Out-Null }; \"skeleton dirs created\")",
-      "PowerShell(Stop-Process *)"
+      "PowerShell(Stop-Process *)",
+      "PowerShell(curl.exe -sSL -o \"$env:TEMP\\\\rustup-init.exe\" https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe; & \"$env:TEMP\\\\rustup-init.exe\" -y --default-toolchain stable-msvc --profile minimal; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" --version; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustc.exe\" --version)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" install flutter_rust_bridge_codegen --locked)",
+      "PowerShell(\\(Invoke-RestMethod \"https://crates.io/api/v1/crates/flutter_rust_bridge\"\\).crate.max_stable_version; \\(Invoke-RestMethod \"https://pub.dev/api/packages/flutter_rust_bridge\"\\).latest.version)",
+      "PowerShell(flutter_rust_bridge_codegen integrate *)",
+      "PowerShell(flutter_rust_bridge_codegen generate *)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" install cargo-expand --locked)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 12)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 10)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" build 2>&1 | Select-Object -Last 5)",
+      "PowerShell(Remove-Item *)"
     ]
   }
 }

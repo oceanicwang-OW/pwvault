@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers.dart';
 import '../shell/main_page.dart';
 
 /// 解锁页占位（T2.6 按 7.2 原型实现：库选择器 + 主密码 + 递增等待）。
-class UnlockPage extends StatelessWidget {
+class UnlockPage extends ConsumerWidget {
   const UnlockPage({super.key});
 
   static const path = '/unlock';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final coreVersion = ref.watch(coreCryptoVersionProvider);
     return Scaffold(
       body: Center(
         child: Column(
@@ -25,6 +28,11 @@ class UnlockPage extends StatelessWidget {
             FilledButton(
               onPressed: () => context.go(MainPage.path),
               child: const Text('解锁（占位）'),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              coreVersion,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
