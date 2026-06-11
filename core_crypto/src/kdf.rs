@@ -23,7 +23,7 @@ pub const DEFAULT_P_LANES: u32 = 4;
 pub struct KdfParams {
     /// 目前仅支持 "argon2id"；其他值解锁时报 [`KdfError::UnsupportedAlgo`]。
     pub algo: String,
-    #[serde(with = "b64")]
+    #[serde(with = "crate::b64")]
     pub salt: Vec<u8>,
     pub m_kib: u32,
     pub t_cost: u32,
@@ -68,22 +68,6 @@ pub fn derive_kek(password: &SecretString, params: &KdfParams) -> Result<SecretB
     a2.hash_password_into(password.expose().as_bytes(), &params.salt, &mut out)
         .map_err(|_| KdfError::InvalidParams)?;
     Ok(SecretBytes::new(out))
-}
-
-/// salt 的 base64 serde 编解码（对齐 PDR 4.3 Header JSON）。
-mod b64 {
-    use base64::engine::general_purpose::STANDARD;
-    use base64::Engine as _;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(v: &[u8], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&STANDARD.encode(v))
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
-        let s = String::deserialize(d)?;
-        STANDARD.decode(s).map_err(serde::de::Error::custom)
-    }
 }
 
 #[cfg(test)]

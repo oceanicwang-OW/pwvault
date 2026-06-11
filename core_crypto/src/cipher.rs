@@ -56,6 +56,51 @@ pub fn seal(key: &SecretBytes, aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, 
     Ok(blob)
 }
 
+/// 加密（nonce 由调用方提供并自行存放，返回 `ciphertext || tag`）。
+///
+/// 仅用于 nonce 需独立存放的场景（如库头 wrapped_dek，PDR 4.3）；
+/// 调用方必须保证 nonce 为新鲜随机值，严禁复用。
+pub fn seal_detached(
+    key: &SecretBytes,
+    nonce: &[u8; NONCE_LEN],
+    aad: &[u8],
+    plaintext: &[u8],
+) -> Result<Vec<u8>, CipherError> {
+    let cipher = Aes256Gcm::new_from_slice(key.expose()).map_err(|_| CipherError::InvalidKey)?;
+    cipher
+        .encrypt(
+            Nonce::from_slice(nonce),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .map_err(|_| CipherError::AuthFailed)
+}
+
+/// [`seal_detached`] 的逆操作：解密 `ciphertext || tag`。
+pub fn open_detached(
+    key: &SecretBytes,
+    nonce: &[u8],
+    aad: &[u8],
+    ct_and_tag: &[u8],
+) -> Result<SecretBytes, CipherError> {
+    if nonce.len() != NONCE_LEN || ct_and_tag.len() < TAG_LEN {
+        return Err(CipherError::Malformed);
+    }
+    let cipher = Aes256Gcm::new_from_slice(key.expose()).map_err(|_| CipherError::InvalidKey)?;
+    let plain = cipher
+        .decrypt(
+            Nonce::from_slice(nonce),
+            Payload {
+                msg: ct_and_tag,
+                aad,
+            },
+        )
+        .map_err(|_| CipherError::AuthFailed)?;
+    Ok(SecretBytes::new(plain))
+}
+
 /// 解密 `nonce || ciphertext || tag`；任何篡改（含 AAD 不匹配）返回 [`CipherError::AuthFailed`]。
 pub fn open(key: &SecretBytes, aad: &[u8], blob: &[u8]) -> Result<SecretBytes, CipherError> {
     if blob.len() < NONCE_LEN + TAG_LEN {
