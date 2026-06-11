@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(flutter *)",
+      "PowerShell($candidates = @\\(\"C:\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\src\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\tools\\\\flutter\\\\bin\\\\flutter.bat\",\"$env:LOCALAPPDATA\\\\flutter\\\\bin\\\\flutter.bat\",\"$env:USERPROFILE\\\\flutter\\\\bin\\\\flutter.bat\",\"G:\\\\flutter\\\\bin\\\\flutter.bat\",\"D:\\\\flutter\\\\bin\\\\flutter.bat\",\"C:\\\\dev\\\\flutter\\\\bin\\\\flutter.bat\"\\); $candidates | Where-Object { Test-Path $_ })",
+      "PowerShell(Get-Command *)",
+      "PowerShell($r = Invoke-RestMethod \"https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json\"; $stable = $r.releases | Where-Object { $_.hash -eq $r.current_release.stable } | Select-Object -First 1; \"$\\($stable.version\\) | $\\($r.base_url\\)/$\\($stable.archive\\)\")",
+      "PowerShell(git *)",
+      "PowerShell(if \\(Test-Path G:\\\\flutter_sdk.zip\\) { \"partial size: {0:N0} bytes\" -f \\(Get-Item G:\\\\flutter_sdk.zip\\).Length } else { \"no partial file\" })",
+      "PowerShell(curl.exe -sSL -C - --retry 20 --retry-all-errors --retry-delay 2 -o G:\\\\flutter_sdk.zip https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.44.1-stable.zip; if \\($LASTEXITCODE -eq 0\\) { tar -xf G:\\\\flutter_sdk.zip -C G:\\\\; if \\($LASTEXITCODE -eq 0\\) { \"EXTRACTED OK\" } else { \"EXTRACT FAILED\" } } else { \"DOWNLOAD FAILED \\($LASTEXITCODE\\)\" })",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\G--claude-code-private-key-management\\\\727a4cd8-5d54-429e-9398-3634b2369366\\\\tasks\\\\bd1ydxcw6.output\" -Tail 2; & G:\\\\flutter\\\\bin\\\\flutter.bat --version)",
+      "PowerShell(Out-Null *)",
+      "PowerShell($dirs = \"lib\\\\features\\\\list\",\"lib\\\\features\\\\detail\",\"lib\\\\features\\\\edit\",\"lib\\\\features\\\\settings\",\"lib\\\\features\\\\sync\",\"lib\\\\services\",\"lib\\\\bridge\"; foreach \\($d in $dirs\\) { New-Item -ItemType Directory -Force \"G:\\\\claude_code\\\\private_key_management\\\\app\\\\$d\" | Out-Null; New-Item -ItemType File -Path \"G:\\\\claude_code\\\\private_key_management\\\\app\\\\$d\\\\.gitkeep\" -Force | Out-Null }; \"skeleton dirs created\")",
+      "PowerShell(Stop-Process *)"
+    ]
+  }
+}
