@@ -21,7 +21,13 @@
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 12)",
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 10)",
       "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" build 2>&1 | Select-Object -Last 5)",
-      "PowerShell(Remove-Item *)"
+      "PowerShell(Remove-Item *)",
+      "PowerShell(gh *)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-Object -Last 25)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result\" ; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy --all-targets 2>&1 | Select-Object -Last 3)",
+      "PowerShell(& \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\rustup.exe\" component add clippy 2>&1 | Select-Object -Last 1; Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy --all-targets 2>&1 | Select-Object -Last 3)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy 2>&1 | Select-String -Pattern \"warning\" -Context 0,6 | Select-Object -First 3)",
+      "PowerShell(Set-Location G:\\\\claude_code\\\\private_key_management\\\\core_crypto; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" clippy --all-targets 2>&1 | Select-Object -Last 1; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" fmt; & \"$env:USERPROFILE\\\\.cargo\\\\bin\\\\cargo.exe\" test 2>&1 | Select-String \"test result\" | Select-Object -First 1)"
     ]
   }
 }
