@@ -19,6 +19,7 @@ CREATE TABLE entries (
 );
 
 CREATE INDEX idx_entries_deleted ON entries(deleted_at);
+CREATE INDEX idx_entries_updated ON entries(updated_at); -- list/search 按 updated_at 排序
 
 -- 库级配置（PDR 5.3），value 为密文（AAD=meta:{key}:value）
 CREATE TABLE meta (
@@ -27,7 +28,11 @@ CREATE TABLE meta (
 );
 
 -- 密码历史（PDR 5.2，T5.4 启用；schema 先行）
+-- id 为 UUIDv7 主键，同时是 AAD 身份：password_ct 的 AAD 必须为
+-- ("history", id, "password")，与现役 entries.password_ct 的
+-- ("entry", entry_id, "password") 域隔离，防历史密文移植回现役槽位。
 CREATE TABLE password_history (
+    id          TEXT PRIMARY KEY,
     entry_id    TEXT NOT NULL REFERENCES entries(id),
     password_ct BLOB NOT NULL,
     replaced_at INTEGER NOT NULL

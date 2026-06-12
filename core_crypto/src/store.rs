@@ -1,16 +1,20 @@
 //! 条目存储层（T1.5）：内存 SQLite + 字段级加解密 CRUD。
 //!
 //! - DB 永远只存在于内存（rusqlite serialize/deserialize 对接容器 Body，
-//!   PDR 4.3）；磁盘上只有容器文件。
-//! - 全部业务字段密文化：blob = `nonce‖ct‖tag`，AAD = `{entry_id}:{field}`
-//!   （cipher::field_aad），防跨字段/跨条目移植。
-//! - rev = `device_id:counter`：device_id 建库生成存 meta，counter 单调
-//!   递增（推进规则由 T4.1 正式化）。
-//! - 软删除写墓碑（deleted_at），密文保留以支持恢复；物理清除归 T4.1。
+//!   PDR 4.3）；`PRAGMA temp_store=MEMORY` 保证排序等临时数据也不落盘。
+//! - 全部业务字段密文化：blob = `nonce‖ct‖tag`，AAD 经长度框架编码，
+//!   条目字段域 `("entry", id, field)`、meta 值域 `("meta", key)`，
+//!   防跨字段/跨条目/跨表移植。
+//! - rev = `device_id:counter`：device_id 为 48-bit 随机熵（hex），
+//!   counter 内存缓存 + 写穿，单调递增；解析失败硬报错而非归零。
+//!   注意：device_id 当前随库持久化（meta 表），T4.1 必须将其迁出
+//!   同步载荷（否则多设备共享同一 device_id，rev 分叉检测失效）。
+//! - 软删除写墓碑（deleted_at），密文保留以支持恢复；删除/恢复均幂等，
+//!   no-op 不推进 rev、不重置墓碑时钟；物理清除归 T4.1。
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::cipher::{self, CipherError};
+use crate::cipher::{self, CipherError, Sealer};
 use crate::secret::{SecretBytes, SecretString};
 
 /// 条目完整明文（PDR 12.7 契约形状；FFI 暴露在 T1.8）。
@@ -55,6 +59,12 @@ pub enum StoreError {
     BadTags,
     #[error("数据库镜像非法或版本不支持: {0}")]
     BadImage(String),
+    #[error("meta 数据非法: {0}")]
+    BadMeta(String),
+    #[error("字段明文不是合法 UTF-8: {0}")]
+    BadEncoding(String),
+    #[error("系统随机源失败")]
+    Rng,
 }
 
 const SCHEMA_VERSION: i64 = 1;
@@ -62,8 +72,9 @@ const MIGRATION_V1: &str = include_str!("../migrations/001_init.sql");
 
 pub struct Store {
     conn: Connection,
-    dek: SecretBytes,
+    sealer: Sealer,
     device_id: String,
+    rev_counter: u64,
 }
 
 impl Store {
@@ -71,13 +82,20 @@ impl Store {
     /// 否则反序列化镜像并校验 schema 版本。
     pub fn open(dek: SecretBytes, body: &[u8]) -> Result<Self, StoreError> {
         let mut conn = Connection::open_in_memory()?;
+        // 临时数据（排序溢出等）必须留在内存，否则违反"磁盘上只有容器文件"
+        conn.pragma_update(None, "temp_store", "MEMORY")?;
+
         if body.is_empty() {
             conn.execute_batch(MIGRATION_V1)?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         } else {
             conn.deserialize_read_exact(c"main", body, body.len(), false)
                 .map_err(|e| StoreError::BadImage(e.to_string()))?;
-            let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+            // sqlite3_deserialize 不校验内容，损坏在首次查询才暴露——
+            // 把这次查询的失败归类为"镜像非法"而非泛化 DB 错误
+            let version: i64 = conn
+                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .map_err(|e| StoreError::BadImage(e.to_string()))?;
             if version != SCHEMA_VERSION {
                 return Err(StoreError::BadImage(format!(
                     "schema 版本 {version} 不支持"
@@ -85,13 +103,15 @@ impl Store {
             }
         }
 
-        let mut store = Self {
+        let sealer = Sealer::new(&dek)?;
+        let device_id = load_or_create_device_id(&conn, &sealer)?;
+        let rev_counter = load_rev_counter(&conn, &sealer)?;
+        Ok(Self {
             conn,
-            dek,
-            device_id: String::new(),
-        };
-        store.device_id = store.load_or_create_device_id()?;
-        Ok(store)
+            sealer,
+            device_id,
+            rev_counter,
+        })
     }
 
     /// 序列化为容器 Body 镜像。
@@ -106,16 +126,19 @@ impl Store {
 
     // ---- 条目 CRUD ----
 
-    /// 新建（id=None）或整体更新（id=Some）。返回更新后的元数据。
+    /// 新建（id=None）或整体更新（id=Some）。墓碑条目拒绝更新
+    /// （报 NotFound，需先 restore）。返回更新后的元数据。
     pub fn upsert(&mut self, e: EntryPlain) -> Result<EntryMeta, StoreError> {
         let now = now_ms();
         let (id, created_at) = match e.id {
             Some(id) => {
                 let created: i64 = self
                     .conn
-                    .query_row("SELECT created_at FROM entries WHERE id = ?1", [&id], |r| {
-                        r.get(0)
-                    })
+                    .query_row(
+                        "SELECT created_at FROM entries WHERE id = ?1 AND deleted_at IS NULL",
+                        [&id],
+                        |r| r.get(0),
+                    )
                     .optional()?
                     .ok_or_else(|| StoreError::NotFound(id.clone()))?;
                 (id, created)
@@ -157,14 +180,26 @@ impl Store {
                 notes_ct,
                 totp_ct,
                 tags_ct,
-                e.favorite as i64,
+                e.favorite,
                 created_at,
                 now,
                 rev,
             ],
         )?;
 
-        self.read_meta_row(&id)
+        // 明文都在手上，直接构造返回，省去回读 + 4 次解密
+        Ok(EntryMeta {
+            id,
+            title: e.title,
+            username: e.username,
+            url: e.url,
+            tags: e.tags,
+            favorite: e.favorite,
+            has_totp: e.totp_uri.is_some(),
+            created_at,
+            updated_at: now,
+            deleted_at: None,
+        })
     }
 
     /// 未删除条目的元数据列表（按 updated_at 降序）。永不解密 password/notes。
@@ -186,9 +221,8 @@ impl Store {
             })
             .optional()?
             .ok_or_else(|| StoreError::NotFound(id.into()))?;
-        let plain = self.open_field(id, "password", &ct)?;
         Ok(SecretString::new(
-            String::from_utf8_lossy(plain.expose()).into_owned(),
+            self.open_field_string(id, "password", &ct)?,
         ))
     }
 
@@ -210,7 +244,7 @@ impl Store {
                         r.get::<_, Vec<u8>>(4)?,
                         r.get::<_, Option<Vec<u8>>>(5)?,
                         r.get::<_, Vec<u8>>(6)?,
-                        r.get::<_, i64>(7)?,
+                        r.get::<_, bool>(7)?,
                     ))
                 },
             )
@@ -237,82 +271,89 @@ impl Store {
                 })
                 .transpose()?,
             tags,
-            favorite: favorite != 0,
+            favorite,
         })
     }
 
-    /// 软删除：写墓碑（密文保留以支持恢复）。
+    /// 软删除：写墓碑（密文保留以支持恢复）。已在回收站则为幂等 no-op
+    /// （不推进 rev、不重置墓碑时间戳，否则 30 天清除时钟被无限重启）。
     pub fn soft_delete(&mut self, id: &str) -> Result<(), StoreError> {
-        let rev = self.next_rev()?;
-        let n = self.conn.execute(
-            "UPDATE entries SET deleted_at = ?1, updated_at = ?1, rev = ?2 WHERE id = ?3",
-            params![now_ms(), rev, id],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound(id.into()));
+        match self.deleted_state(id)? {
+            None => Err(StoreError::NotFound(id.into())),
+            Some(Some(_)) => Ok(()), // 已删除，no-op
+            Some(None) => {
+                let rev = self.next_rev()?;
+                self.conn.execute(
+                    "UPDATE entries SET deleted_at = ?1, updated_at = ?1, rev = ?2
+                     WHERE id = ?3 AND deleted_at IS NULL",
+                    params![now_ms(), rev, id],
+                )?;
+                Ok(())
+            }
         }
-        Ok(())
     }
 
-    /// 从回收站恢复。
+    /// 从回收站恢复。未删除条目为幂等 no-op（不推进 rev，避免制造假分叉）。
     pub fn restore(&mut self, id: &str) -> Result<(), StoreError> {
-        let rev = self.next_rev()?;
-        let n = self.conn.execute(
-            "UPDATE entries SET deleted_at = NULL, updated_at = ?1, rev = ?2 WHERE id = ?3",
-            params![now_ms(), rev, id],
-        )?;
-        if n == 0 {
-            return Err(StoreError::NotFound(id.into()));
+        match self.deleted_state(id)? {
+            None => Err(StoreError::NotFound(id.into())),
+            Some(None) => Ok(()), // 本就未删除，no-op
+            Some(Some(_)) => {
+                let rev = self.next_rev()?;
+                self.conn.execute(
+                    "UPDATE entries SET deleted_at = NULL, updated_at = ?1, rev = ?2
+                     WHERE id = ?3 AND deleted_at IS NOT NULL",
+                    params![now_ms(), rev, id],
+                )?;
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     // ---- meta 表（值加密） ----
 
     pub fn meta_set(&mut self, key: &str, value: &[u8]) -> Result<(), StoreError> {
-        let ct = self.seal_field(&format!("meta:{key}"), "value", value)?;
-        self.conn.execute(
-            "INSERT INTO meta (key, value_ct) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value_ct = excluded.value_ct",
-            params![key, ct],
-        )?;
-        Ok(())
+        meta_set_raw(&self.conn, &self.sealer, key, value)
     }
 
     pub fn meta_get(&self, key: &str) -> Result<Option<SecretBytes>, StoreError> {
-        let ct: Option<Vec<u8>> = self
-            .conn
-            .query_row("SELECT value_ct FROM meta WHERE key = ?1", [key], |r| {
-                r.get(0)
-            })
-            .optional()?;
-        ct.map(|ct| self.open_field(&format!("meta:{key}"), "value", &ct))
-            .transpose()
-            .map_err(Into::into)
+        meta_get_raw(&self.conn, &self.sealer, key)
     }
 
     // ---- 内部 ----
 
+    /// None = 条目不存在；Some(state) = 该行的 deleted_at。
+    fn deleted_state(&self, id: &str) -> Result<Option<Option<i64>>, StoreError> {
+        Ok(self
+            .conn
+            .query_row("SELECT deleted_at FROM entries WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
     fn seal_field(&self, id: &str, field: &str, plain: &[u8]) -> Result<Vec<u8>, CipherError> {
-        cipher::seal(&self.dek, &cipher::field_aad(id, field), plain)
+        self.sealer.seal(&cipher::field_aad(id, field), plain)
     }
 
     fn open_field(&self, id: &str, field: &str, ct: &[u8]) -> Result<SecretBytes, CipherError> {
-        cipher::open(&self.dek, &cipher::field_aad(id, field), ct)
+        self.sealer.open(&cipher::field_aad(id, field), ct)
     }
 
     fn open_field_string(&self, id: &str, field: &str, ct: &[u8]) -> Result<String, StoreError> {
         let plain = self.open_field(id, field, ct)?;
-        Ok(String::from_utf8_lossy(plain.expose()).into_owned())
+        String::from_utf8(plain.expose().to_vec())
+            .map_err(|_| StoreError::BadEncoding(format!("{id}:{field}")))
     }
 
     fn query_meta(&self, where_clause: &str) -> Result<Vec<EntryMeta>, StoreError> {
+        // where_clause 只接受本文件内的常量子句；任何带值的过滤必须走绑定参数
         let sql = format!(
-            "SELECT id, title_ct, username_ct, url_ct, tags_ct, totp_ct, favorite,
+            "SELECT id, title_ct, username_ct, url_ct, tags_ct, totp_ct IS NOT NULL, favorite,
                     created_at, updated_at, deleted_at
              FROM entries WHERE {where_clause} ORDER BY updated_at DESC"
         );
-        let mut stmt = self.conn.prepare(&sql)?;
+        let mut stmt = self.conn.prepare_cached(&sql)?;
         let rows = stmt.query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
@@ -320,8 +361,8 @@ impl Store {
                 r.get::<_, Vec<u8>>(2)?,
                 r.get::<_, Vec<u8>>(3)?,
                 r.get::<_, Vec<u8>>(4)?,
-                r.get::<_, Option<Vec<u8>>>(5)?,
-                r.get::<_, i64>(6)?,
+                r.get::<_, bool>(5)?,
+                r.get::<_, bool>(6)?,
                 r.get::<_, i64>(7)?,
                 r.get::<_, i64>(8)?,
                 r.get::<_, Option<i64>>(9)?,
@@ -330,7 +371,7 @@ impl Store {
 
         let mut out = Vec::new();
         for row in rows {
-            let (id, title_ct, username_ct, url_ct, tags_ct, totp_ct, favorite, c, u, d) = row?;
+            let (id, title_ct, username_ct, url_ct, tags_ct, has_totp, favorite, c, u, d) = row?;
             let tags_json = self.open_field(&id, "tags", &tags_ct)?;
             let tags: Vec<String> =
                 serde_json::from_slice(tags_json.expose()).map_err(|_| StoreError::BadTags)?;
@@ -339,8 +380,8 @@ impl Store {
                 username: self.open_field_string(&id, "username", &username_ct)?,
                 url: self.open_field_string(&id, "url", &url_ct)?,
                 tags,
-                favorite: favorite != 0,
-                has_totp: totp_ct.is_some(),
+                favorite,
+                has_totp,
                 created_at: c,
                 updated_at: u,
                 deleted_at: d,
@@ -350,33 +391,85 @@ impl Store {
         Ok(out)
     }
 
-    fn read_meta_row(&self, id: &str) -> Result<EntryMeta, StoreError> {
-        self.query_meta(&format!("id = '{}'", id.replace('\'', "''")))?
-            .into_iter()
-            .next()
-            .ok_or_else(|| StoreError::NotFound(id.into()))
-    }
-
-    fn load_or_create_device_id(&mut self) -> Result<String, StoreError> {
-        if let Some(v) = self.meta_get("device_id")? {
-            return Ok(String::from_utf8_lossy(v.expose()).into_owned());
-        }
-        let id = uuid::Uuid::now_v7().simple().to_string()[..12].to_string();
-        self.meta_set("device_id", id.as_bytes())?;
-        Ok(id)
-    }
-
-    /// rev 推进：`device_id:counter`，counter 取本设备历史最大值 +1
-    /// （正式推进规则与多设备语义归 T4.1）。
+    /// rev 推进：counter 内存缓存，先持久化再提交到内存，保证落库值
+    /// 不落后于已发出的 rev（正式推进规则与多设备语义归 T4.1）。
     fn next_rev(&mut self) -> Result<String, StoreError> {
-        let counter = match self.meta_get("rev_counter")? {
-            Some(v) => String::from_utf8_lossy(v.expose())
-                .parse::<u64>()
-                .unwrap_or(0),
-            None => 0,
-        } + 1;
-        self.meta_set("rev_counter", counter.to_string().as_bytes())?;
-        Ok(format!("{}:{}", self.device_id, counter))
+        let next = self.rev_counter + 1;
+        meta_set_raw(
+            &self.conn,
+            &self.sealer,
+            "rev_counter",
+            next.to_string().as_bytes(),
+        )?;
+        self.rev_counter = next;
+        Ok(format!("{}:{}", self.device_id, next))
+    }
+}
+
+fn meta_set_raw(
+    conn: &Connection,
+    sealer: &Sealer,
+    key: &str,
+    value: &[u8],
+) -> Result<(), StoreError> {
+    let ct = sealer.seal(&cipher::meta_aad(key), value)?;
+    conn.execute(
+        "INSERT INTO meta (key, value_ct) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value_ct = excluded.value_ct",
+        params![key, ct],
+    )?;
+    Ok(())
+}
+
+fn meta_get_raw(
+    conn: &Connection,
+    sealer: &Sealer,
+    key: &str,
+) -> Result<Option<SecretBytes>, StoreError> {
+    let ct: Option<Vec<u8>> = conn
+        .query_row("SELECT value_ct FROM meta WHERE key = ?1", [key], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    ct.map(|ct| sealer.open(&cipher::meta_aad(key), &ct))
+        .transpose()
+        .map_err(Into::into)
+}
+
+fn meta_get_utf8(
+    conn: &Connection,
+    sealer: &Sealer,
+    key: &str,
+) -> Result<Option<String>, StoreError> {
+    meta_get_raw(conn, sealer, key)?
+        .map(|v| {
+            String::from_utf8(v.expose().to_vec())
+                .map_err(|_| StoreError::BadMeta(format!("{key} 不是合法 UTF-8")))
+        })
+        .transpose()
+}
+
+/// device_id：48-bit 随机熵 hex（12 字符）。
+/// 注意：UUIDv7 前 48 bit 是纯时间戳，绝不能截取它当身份用。
+fn load_or_create_device_id(conn: &Connection, sealer: &Sealer) -> Result<String, StoreError> {
+    if let Some(id) = meta_get_utf8(conn, sealer, "device_id")? {
+        return Ok(id);
+    }
+    let mut raw = [0u8; 6];
+    getrandom::fill(&mut raw).map_err(|_| StoreError::Rng)?;
+    let id: String = raw.iter().map(|b| format!("{b:02x}")).collect();
+    meta_set_raw(conn, sealer, "device_id", id.as_bytes())?;
+    Ok(id)
+}
+
+/// rev_counter 严格解析：损坏即报错。静默归零会重发已用过的 rev，
+/// 让同步层把陈旧数据当新数据。
+fn load_rev_counter(conn: &Connection, sealer: &Sealer) -> Result<u64, StoreError> {
+    match meta_get_utf8(conn, sealer, "rev_counter")? {
+        None => Ok(0),
+        Some(s) => s
+            .parse::<u64>()
+            .map_err(|_| StoreError::BadMeta(format!("rev_counter 非法: {s:?}"))),
     }
 }
 
@@ -423,6 +516,10 @@ mod tests {
         assert!(meta.has_totp);
         assert!(meta.deleted_at.is_none());
 
+        // upsert 直接构造的 EntryMeta 必须与落库后回查一致
+        let listed = s.list_meta().unwrap();
+        assert_eq!(listed, vec![meta.clone()]);
+
         let full = s.get_full(&meta.id).unwrap();
         assert_eq!(full.password.expose(), "kQ9#mTr2!vLp");
         assert_eq!(full.notes, "secret note marker");
@@ -441,16 +538,12 @@ mod tests {
     fn update_preserves_created_at_and_advances_rev() {
         let mut s = Store::open(dek(), &[]).unwrap();
         let meta = s.upsert(sample_entry()).unwrap();
-        let rev0 = {
-            let m = s.list_meta().unwrap();
-            assert_eq!(m.len(), 1);
-            // rev 不在 EntryMeta 中暴露，从 DB 直读验证格式
-            s.conn
-                .query_row("SELECT rev FROM entries WHERE id=?1", [&meta.id], |r| {
-                    r.get::<_, String>(0)
-                })
-                .unwrap()
-        };
+        let rev0: String = s
+            .conn
+            .query_row("SELECT rev FROM entries WHERE id=?1", [&meta.id], |r| {
+                r.get(0)
+            })
+            .unwrap();
         assert!(rev0.starts_with(&format!("{}:", s.device_id())));
 
         let mut e2 = sample_entry();
@@ -537,6 +630,92 @@ mod tests {
         assert!(s.list_trash().unwrap().is_empty());
     }
 
+    /// 删除/恢复幂等：no-op 不推进 rev、不重置墓碑时钟。
+    #[test]
+    fn delete_restore_are_idempotent_noops() {
+        let mut s = Store::open(dek(), &[]).unwrap();
+        let meta = s.upsert(sample_entry()).unwrap();
+
+        // restore 未删除条目：no-op，rev 不动
+        let counter_before = s.rev_counter;
+        s.restore(&meta.id).unwrap();
+        assert_eq!(s.rev_counter, counter_before, "no-op restore 不得推进 rev");
+
+        // 重复删除：墓碑时间戳保持首删值
+        s.soft_delete(&meta.id).unwrap();
+        let t1 = s.list_trash().unwrap()[0].deleted_at;
+        let counter_after_delete = s.rev_counter;
+        std::thread::sleep(std::time::Duration::from_millis(3));
+        s.soft_delete(&meta.id).unwrap();
+        assert_eq!(
+            s.list_trash().unwrap()[0].deleted_at,
+            t1,
+            "重复删除不得重置墓碑时钟"
+        );
+        assert_eq!(s.rev_counter, counter_after_delete);
+    }
+
+    /// 墓碑条目拒绝 upsert：防止"保存成功但数据躺在回收站"。
+    #[test]
+    fn upsert_rejects_tombstoned_entry() {
+        let mut s = Store::open(dek(), &[]).unwrap();
+        let meta = s.upsert(sample_entry()).unwrap();
+        s.soft_delete(&meta.id).unwrap();
+
+        let mut e = sample_entry();
+        e.id = Some(meta.id.clone());
+        assert!(matches!(s.upsert(e), Err(StoreError::NotFound(_))));
+        // 墓碑未被触碰
+        assert_eq!(s.list_trash().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn device_ids_have_entropy() {
+        let s1 = Store::open(dek(), &[]).unwrap();
+        let s2 = Store::open(dek(), &[]).unwrap();
+        assert_eq!(s1.device_id().len(), 12);
+        assert_ne!(
+            s1.device_id(),
+            s2.device_id(),
+            "同毫秒创建的两个库 device_id 不得相同（必须含随机熵）"
+        );
+    }
+
+    /// rev_counter 损坏必须硬报错，不得静默归零重发旧 rev。
+    #[test]
+    fn corrupt_rev_counter_fails_loudly() {
+        let mut s = Store::open(dek(), &[]).unwrap();
+        s.upsert(sample_entry()).unwrap();
+        s.meta_set("rev_counter", b"not-a-number").unwrap();
+        let image = s.serialize().unwrap();
+
+        assert!(matches!(
+            Store::open(dek(), &image),
+            Err(StoreError::BadMeta(_))
+        ));
+    }
+
+    /// 垃圾镜像应报 BadImage（而非泛化 Db 错误）。
+    #[test]
+    fn garbage_image_reports_bad_image() {
+        let garbage = vec![0xABu8; 4096];
+        assert!(matches!(
+            Store::open(dek(), &garbage),
+            Err(StoreError::BadImage(_))
+        ));
+    }
+
+    /// 临时数据不落盘：temp_store 必须为 MEMORY(2)。
+    #[test]
+    fn temp_store_is_memory() {
+        let s = Store::open(dek(), &[]).unwrap();
+        let v: i64 = s
+            .conn
+            .query_row("PRAGMA temp_store", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, 2, "temp_store 应为 MEMORY，防排序溢出落盘");
+    }
+
     #[test]
     fn wrong_dek_fails_decryption_not_schema() {
         let mut s = Store::open(dek(), &[]).unwrap();
@@ -544,12 +723,13 @@ mod tests {
         let image = s.serialize().unwrap();
 
         let s2 = Store::open(SecretBytes::new(vec![0x43; 32]), &image);
-        // schema 可读，但任何解密路径必须失败
+        // schema 可读，但任何解密路径必须失败（open 阶段读 meta 即失败）
         match s2 {
             Ok(s2) => {
                 assert!(matches!(s2.list_meta(), Err(StoreError::Cipher(_))));
             }
-            Err(_) => {} // device_id 解密失败也可接受
+            Err(StoreError::Cipher(_)) => {}
+            Err(e) => panic!("意外错误类型: {e:?}"),
         }
     }
 
