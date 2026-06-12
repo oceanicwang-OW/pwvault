@@ -30,30 +30,85 @@ pub enum CipherError {
     Rng,
 }
 
-/// 构造字段 AAD：`"{entry_id}:{field}"`。
-pub fn field_aad(entry_id: &str, field: &str) -> Vec<u8> {
-    format!("{entry_id}:{field}").into_bytes()
+/// 多段 AAD 规范编码：每段前缀 u32 LE 长度，彻底消除拼接歧义
+/// （`["a:b","c"]` 与 `["a","b:c"]` 编码不同）。编码格式是库格式的一部分，
+/// 不可变更。各加密面用首段作为域标签：`entry` / `meta` / `history`（T5.4）。
+pub fn aad(parts: &[&[u8]]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(parts.iter().map(|p| 4 + p.len()).sum());
+    for p in parts {
+        out.extend_from_slice(&(p.len() as u32).to_le_bytes());
+        out.extend_from_slice(p);
+    }
+    out
 }
 
-/// 加密：返回 `nonce || ciphertext || tag`。
-pub fn seal(key: &SecretBytes, aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
-    let cipher = Aes256Gcm::new_from_slice(key.expose()).map_err(|_| CipherError::InvalidKey)?;
-    let mut nonce = [0u8; NONCE_LEN];
-    getrandom::fill(&mut nonce).map_err(|_| CipherError::Rng)?;
-    let ct_and_tag = cipher
-        .encrypt(
-            Nonce::from_slice(&nonce),
-            Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
-        .map_err(|_| CipherError::AuthFailed)?;
+/// 条目字段 AAD：`("entry", entry_id, field)`。
+pub fn field_aad(entry_id: &str, field: &str) -> Vec<u8> {
+    aad(&[b"entry", entry_id.as_bytes(), field.as_bytes()])
+}
 
-    let mut blob = Vec::with_capacity(NONCE_LEN + ct_and_tag.len());
-    blob.extend_from_slice(&nonce);
-    blob.extend_from_slice(&ct_and_tag);
-    Ok(blob)
+/// meta 表值 AAD：`("meta", key)`。
+pub fn meta_aad(key: &str) -> Vec<u8> {
+    aad(&[b"meta", key.as_bytes()])
+}
+
+/// 缓存 AES 密钥调度的加解密器。密钥固定的长生命周期持有者（store 层）
+/// 必须复用本类型，避免每次字段操作重建轮密钥（3000 条列表 = 上万次）。
+pub struct Sealer {
+    aes: Aes256Gcm,
+}
+
+impl Sealer {
+    pub fn new(key: &SecretBytes) -> Result<Self, CipherError> {
+        Ok(Self {
+            aes: Aes256Gcm::new_from_slice(key.expose()).map_err(|_| CipherError::InvalidKey)?,
+        })
+    }
+
+    /// 加密：返回 `nonce || ciphertext || tag`，每次新随机 nonce。
+    pub fn seal(&self, aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+        let mut nonce = [0u8; NONCE_LEN];
+        getrandom::fill(&mut nonce).map_err(|_| CipherError::Rng)?;
+        let ct_and_tag = self
+            .aes
+            .encrypt(
+                Nonce::from_slice(&nonce),
+                Payload {
+                    msg: plaintext,
+                    aad,
+                },
+            )
+            .map_err(|_| CipherError::AuthFailed)?;
+
+        let mut blob = Vec::with_capacity(NONCE_LEN + ct_and_tag.len());
+        blob.extend_from_slice(&nonce);
+        blob.extend_from_slice(&ct_and_tag);
+        Ok(blob)
+    }
+
+    /// 解密 `nonce || ciphertext || tag`；任何篡改返回 [`CipherError::AuthFailed`]。
+    pub fn open(&self, aad: &[u8], blob: &[u8]) -> Result<SecretBytes, CipherError> {
+        if blob.len() < NONCE_LEN + TAG_LEN {
+            return Err(CipherError::Malformed);
+        }
+        let (nonce, ct_and_tag) = blob.split_at(NONCE_LEN);
+        let plain = self
+            .aes
+            .decrypt(
+                Nonce::from_slice(nonce),
+                Payload {
+                    msg: ct_and_tag,
+                    aad,
+                },
+            )
+            .map_err(|_| CipherError::AuthFailed)?;
+        Ok(SecretBytes::new(plain))
+    }
+}
+
+/// 一次性加密（内部即时构建密钥调度；高频路径请持有 [`Sealer`]）。
+pub fn seal(key: &SecretBytes, aad: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, CipherError> {
+    Sealer::new(key)?.seal(aad, plaintext)
 }
 
 /// 加密（nonce 由调用方提供并自行存放，返回 `ciphertext || tag`）。
@@ -101,23 +156,9 @@ pub fn open_detached(
     Ok(SecretBytes::new(plain))
 }
 
-/// 解密 `nonce || ciphertext || tag`；任何篡改（含 AAD 不匹配）返回 [`CipherError::AuthFailed`]。
+/// 一次性解密（内部即时构建密钥调度；高频路径请持有 [`Sealer`]）。
 pub fn open(key: &SecretBytes, aad: &[u8], blob: &[u8]) -> Result<SecretBytes, CipherError> {
-    if blob.len() < NONCE_LEN + TAG_LEN {
-        return Err(CipherError::Malformed);
-    }
-    let cipher = Aes256Gcm::new_from_slice(key.expose()).map_err(|_| CipherError::InvalidKey)?;
-    let (nonce, ct_and_tag) = blob.split_at(NONCE_LEN);
-    let plain = cipher
-        .decrypt(
-            Nonce::from_slice(nonce),
-            Payload {
-                msg: ct_and_tag,
-                aad,
-            },
-        )
-        .map_err(|_| CipherError::AuthFailed)?;
-    Ok(SecretBytes::new(plain))
+    Sealer::new(key)?.open(aad, blob)
 }
 
 #[cfg(test)]
@@ -268,7 +309,20 @@ mod tests {
     }
 
     #[test]
-    fn field_aad_format() {
-        assert_eq!(field_aad("abc", "password"), b"abc:password".to_vec());
+    fn field_aad_format_is_length_framed() {
+        let mut expected = Vec::new();
+        for part in [&b"entry"[..], b"abc", b"password"] {
+            expected.extend_from_slice(&(part.len() as u32).to_le_bytes());
+            expected.extend_from_slice(part);
+        }
+        assert_eq!(field_aad("abc", "password"), expected);
+    }
+
+    /// 长度框架消除拼接歧义；entry/meta 域天然隔离。
+    #[test]
+    fn aad_framing_is_unambiguous() {
+        assert_ne!(aad(&[b"a:b", b"c"]), aad(&[b"a", b"b:c"]));
+        assert_ne!(aad(&[b"ab", b""]), aad(&[b"a", b"b"]));
+        assert_ne!(field_aad("device_id", "value"), meta_aad("device_id"));
     }
 }
