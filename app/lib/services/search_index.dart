@@ -3,8 +3,9 @@ import 'package:pinyin/pinyin.dart';
 
 import 'vault_service.dart';
 
-final entryRecentUseProvider = StateProvider<Map<String, int>>(
-  (ref) => const {},
+final entryRecentUseProvider =
+    NotifierProvider<EntryRecentUseNotifier, Map<String, int>>(
+  EntryRecentUseNotifier.new,
 );
 
 final searchIndexProvider = Provider<SearchIndexService>(
@@ -13,6 +14,22 @@ final searchIndexProvider = Provider<SearchIndexService>(
     recentUse: ref.watch(entryRecentUseProvider),
   ),
 );
+
+class EntryRecentUseNotifier extends Notifier<Map<String, int>> {
+  @override
+  Map<String, int> build() => const {};
+
+  void markUsed(String entryId, {int? at}) {
+    state = {
+      ...state,
+      entryId: at ?? DateTime.now().millisecondsSinceEpoch,
+    };
+  }
+
+  void replaceAll(Map<String, int> recentUse) {
+    state = Map.unmodifiable(recentUse);
+  }
+}
 
 class SearchIndexService {
   final List<_IndexedEntry> _entries;
@@ -171,12 +188,29 @@ class _IndexedEntry {
 }
 
 class _Pinyin {
-  static String full(String value) => PinyinHelper.getPinyinE(
-    value,
-    separator: '',
-    format: PinyinFormat.WITHOUT_TONE,
-  ).toLowerCase();
+  static final Map<String, String> _fullCache = {};
+  static final Map<String, String> _shortCache = {};
+  static final RegExp _cjk = RegExp(r'[\u3400-\u9fff]');
 
-  static String short(String value) =>
-      PinyinHelper.getShortPinyin(value).toLowerCase();
+  static String full(String value) {
+    final lower = value.toLowerCase();
+    if (!_cjk.hasMatch(value)) return lower;
+    return _fullCache.putIfAbsent(
+      value,
+      () => PinyinHelper.getPinyinE(
+        value,
+        separator: '',
+        format: PinyinFormat.WITHOUT_TONE,
+      ).toLowerCase(),
+    );
+  }
+
+  static String short(String value) {
+    final lower = value.toLowerCase();
+    if (!_cjk.hasMatch(value)) return lower;
+    return _shortCache.putIfAbsent(
+      value,
+      () => PinyinHelper.getShortPinyin(value).toLowerCase(),
+    );
+  }
 }
