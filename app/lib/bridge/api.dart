@@ -5,6 +5,111 @@
 
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'store.dart';
+
+// These functions are ignored because they are not marked as `pub`: `emap`, `from_plain`, `lock`, `wrap`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
 /// 连通性探针：返回 crate 名与版本，供三端验证 FFI 链路。
 String ping() => RustLib.instance.api.crateApiPing();
+
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<VaultHandle>>
+abstract class VaultHandle implements RustOpaqueInterface {
+  /// 改主密码（新盐 + 新 KEK 重包裹同一 DEK）。
+  Future<void> changePassword({required String old, required String new_});
+
+  /// 建库并解锁。路径已存在则报 ALREADY_EXISTS。
+  static Future<VaultHandle> create({
+    required String path,
+    required String password,
+  }) => RustLib.instance.api.crateApiVaultHandleCreate(
+    path: path,
+    password: password,
+  );
+
+  /// 本设备 id（rev 前缀）。
+  Future<String> deviceId();
+
+  /// 完整明文（编辑页用）。
+  Future<EntryDraft> getFull({required String id});
+
+  /// 未删除条目元数据（永不含密码/备注/TOTP secret）。
+  Future<List<EntryMeta>> listMeta();
+
+  /// 回收站条目元数据。
+  Future<List<EntryMeta>> listTrash();
+
+  /// 从回收站恢复。
+  Future<void> restore({required String id});
+
+  /// 单条按需解密密码（"点击显示"；调用方负责 10s 内丢弃返回串）。
+  Future<String> revealPassword({required String id});
+
+  /// 软删除（写墓碑）。
+  Future<void> softDelete({required String id});
+
+  /// 解锁现有库。密码错误（或库头篡改）报 WRONG_PASSWORD。
+  static Future<VaultHandle> unlock({
+    required String path,
+    required String password,
+  }) => RustLib.instance.api.crateApiVaultHandleUnlock(
+    path: path,
+    password: password,
+  );
+
+  /// 新建或整体更新条目，返回更新后的元数据。
+  Future<EntryMeta> upsert({required EntryDraft draft});
+}
+
+/// 条目明文（FFI 输入/输出，全部字段为普通 String）。
+/// 输入（upsert）：id=None 为新建。输出（get_full）：id=Some。
+class EntryDraft {
+  final String? id;
+  final String title;
+  final String username;
+  final String password;
+  final String url;
+  final String notes;
+  final String? totpUri;
+  final List<String> tags;
+  final bool favorite;
+
+  const EntryDraft({
+    this.id,
+    required this.title,
+    required this.username,
+    required this.password,
+    required this.url,
+    required this.notes,
+    this.totpUri,
+    required this.tags,
+    required this.favorite,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      username.hashCode ^
+      password.hashCode ^
+      url.hashCode ^
+      notes.hashCode ^
+      totpUri.hashCode ^
+      tags.hashCode ^
+      favorite.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EntryDraft &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          username == other.username &&
+          password == other.password &&
+          url == other.url &&
+          notes == other.notes &&
+          totpUri == other.totpUri &&
+          tags == other.tags &&
+          favorite == other.favorite;
+}
