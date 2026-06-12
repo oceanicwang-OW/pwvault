@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cipher::CipherError;
 use crate::kdf::{self, KdfError, KdfParams};
+use crate::persist::{self, PersistError};
 use crate::secret::{SecretBytes, SecretString};
 use crate::vault_format::{self, VaultFormatError, VaultHeader};
 
@@ -35,6 +36,8 @@ pub enum VaultError {
     Cipher(#[from] CipherError),
     #[error("IO 错误: {0}")]
     Io(#[from] std::io::Error),
+    #[error("持久化错误: {0}")]
+    Persist(#[from] PersistError),
     #[error("系统随机源失败")]
     Rng,
 }
@@ -122,10 +125,10 @@ impl Vault {
         self.save()
     }
 
-    /// 序列化容器并整文件写盘（T1.6 改为原子写 + 滚动备份）。
+    /// 序列化容器并原子写盘（tmp + fsync + rename）+ 滚动备份（T1.6）。
     pub fn save(&self) -> Result<(), VaultError> {
         let bytes = vault_format::encode(&self.header, &self.body)?;
-        std::fs::write(&self.path, bytes)?;
+        persist::save_atomic(&self.path, &bytes)?;
         Ok(())
     }
 
@@ -281,6 +284,50 @@ mod tests {
         ));
         assert_eq!(v.header(), &header0, "失败的改密不得改动 Header");
         assert!(Vault::unlock(&path, &pw("master")).is_ok());
+    }
+
+    /// 端到端验收：保存中途崩溃（rename 前）后整库仍能用旧密码解锁、
+    /// 内容完整（原子写 + 库尾 checksum 共同保证）。
+    #[test]
+    fn crash_during_save_leaves_vault_openable() {
+        use crate::persist::{save_atomic_impl, FaultPoint};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_vault_path(&dir);
+
+        let mut v = Vault::create(&path, &pw("master"), Some(cheap_kdf())).unwrap();
+        v.set_body(b"committed-body-v1".to_vec());
+        v.save().unwrap();
+
+        // 模拟写新版时在 rename 前崩溃
+        let new_bytes = crate::vault_format::encode(v.header(), b"half-written-v2").unwrap();
+        let err = save_atomic_impl(&path, &new_bytes, FaultPoint::AfterTmpBeforeRename);
+        assert!(err.is_err());
+
+        // 重新解锁：主文件仍是 v1，checksum 通过，内容完整
+        let v2 = Vault::unlock(&path, &pw("master")).unwrap();
+        assert_eq!(v2.body(), b"committed-body-v1");
+    }
+
+    /// 备份是有效容器：可用同一主密码独立解锁出旧版内容。
+    #[test]
+    fn rolled_backup_is_a_decryptable_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_vault_path(&dir);
+
+        // create 自身 save 一次（空 body 入备份），故 v1 是第 2 个备份
+        let mut v = Vault::create(&path, &pw("master"), Some(cheap_kdf())).unwrap();
+        v.set_body(b"body-v1".to_vec());
+        v.save().unwrap();
+        v.set_body(b"body-v2".to_vec());
+        v.save().unwrap(); // 触发 v1 滚入备份
+
+        let backups =
+            crate::persist::list_backups_for_test(&dir.path().join("backups"), "vault.pwvault");
+        assert_eq!(backups.len(), 2, "空 body 与 v1 各一份备份");
+        // 最新备份（v1）可独立解锁出旧版内容
+        let v_old = Vault::unlock(backups.last().unwrap(), &pw("master")).unwrap();
+        assert_eq!(v_old.body(), b"body-v1");
     }
 
     #[test]
