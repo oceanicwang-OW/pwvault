@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pwvault/features/list/entry_list_panel.dart';
 
 void main() {
   Future<void> pumpPanel(WidgetTester tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: EntryListPanel())),
+      const ProviderScope(
+        child: MaterialApp(home: Scaffold(body: EntryListPanel())),
+      ),
     );
   }
 
