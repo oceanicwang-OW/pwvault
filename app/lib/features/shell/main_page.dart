@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../detail/entry_detail_panel.dart';
 import '../list/entry_list_panel.dart';
 import '../unlock/unlock_page.dart';
 
@@ -33,7 +34,7 @@ class MainPage extends StatelessWidget {
               children: [
                 if (!compact) _VaultSidebar(colorScheme: colorScheme),
                 const EntryListPanel(),
-                const Expanded(child: _EntryDetailColumn()),
+                const Expanded(child: EntryDetailPanel()),
               ],
             ),
           ),
@@ -123,139 +124,6 @@ class _VaultSidebar extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EntryDetailColumn extends StatelessWidget {
-  const _EntryDetailColumn();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      key: const ValueKey('entry-detail-column'),
-      decoration: BoxDecoration(color: colorScheme.surface),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const _Avatar(
-                  initial: '淘',
-                  size: 40,
-                  background: Color(0xFFFAECE7),
-                  foreground: Color(0xFF712B13),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '淘宝',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      Text(
-                        '修改于 3 天前',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: '编辑',
-                  onPressed: () {},
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: '常用',
-                  onPressed: () {},
-                  icon: const Icon(Icons.star_border_outlined),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Column(
-                children: [
-                  _FieldRow(
-                    label: '用户名',
-                    value: 'owen_dev@163.com',
-                    trailingIcon: Icons.copy_outlined,
-                  ),
-                  _FieldRow(
-                    label: '密码',
-                    value: '••••••••',
-                    sensitive: true,
-                    trailingIcon: Icons.visibility_outlined,
-                    secondaryTrailingIcon: Icons.copy_outlined,
-                  ),
-                  _FieldRow(
-                    label: '网址',
-                    value: 'taobao.com',
-                    isLink: true,
-                    trailingIcon: Icons.open_in_new,
-                  ),
-                  _FieldRow(label: '标签', tagValue: '个人', isLast: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.tertiaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.content_paste_outlined,
-                      size: 16,
-                      color: colorScheme.onTertiaryContainer,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '密码已复制，23 秒后自动清空剪贴板',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onTertiaryContainer,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 60,
-                      child: LinearProgressIndicator(
-                        value: 0.7,
-                        minHeight: 4,
-                        color: colorScheme.onTertiaryContainer,
-                        backgroundColor: colorScheme.onTertiaryContainer
-                            .withValues(alpha: 0.24),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -361,135 +229,6 @@ class _TagRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.initial,
-    required this.size,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String initial;
-  final double size;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        initial,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _FieldRow extends StatelessWidget {
-  const _FieldRow({
-    required this.label,
-    this.value,
-    this.isLink = false,
-    this.trailingIcon,
-    this.secondaryTrailingIcon,
-    this.sensitive = false,
-    this.tagValue,
-    this.isLast = false,
-  });
-
-  final String label;
-  final String? value;
-  final bool isLink;
-  final IconData? trailingIcon;
-  final IconData? secondaryTrailingIcon;
-  final bool sensitive;
-  final String? tagValue;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: sensitive ? colorScheme.surfaceContainerHighest : null,
-        border: isLast
-            ? null
-            : Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 72,
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            Expanded(
-              child: tagValue == null
-                  ? Text(
-                      value ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isLink ? colorScheme.primary : null,
-                        letterSpacing: sensitive ? 2 : 0,
-                        fontFamily: sensitive ? 'monospace' : null,
-                      ),
-                    )
-                  : Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          tagValue!,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.onSecondaryContainer),
-                        ),
-                      ),
-                    ),
-            ),
-            if (trailingIcon != null)
-              IconButton(
-                tooltip: label,
-                onPressed: () {},
-                icon: Icon(trailingIcon, size: 18),
-              ),
-            if (secondaryTrailingIcon != null)
-              IconButton(
-                tooltip: '$label 复制',
-                onPressed: () {},
-                icon: Icon(secondaryTrailingIcon, size: 18),
-              ),
-          ],
-        ),
       ),
     );
   }
