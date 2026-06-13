@@ -101,3 +101,6 @@ List<EntryMeta> _seedEntries() => [
 
 /// 可选标签集合（mock 阶段固定）。
 const kMockTagOptions = <String>['工作', '个人', '金融', '购物', '社交'];
+
+/// 某条目的 mock 明文密码（T2.11 Enter 复制用；真实库接 `entry_reveal_password`）。
+String mockPasswordFor(String entryId) => 'pw-$entryId-2024!';
