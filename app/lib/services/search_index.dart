@@ -75,6 +75,25 @@ class SearchIndexService {
     return hits.map((hit) => hit.entry.meta).toList();
   }
 
+  /// 在 [search] 排序结果之上附带"是否拼音命中"标记，供列表栏结果区标注。
+  SearchOutcome searchDetailed(String query) {
+    final entries = search(query);
+    final tokens = _tokenize(query);
+    if (tokens.isEmpty || entries.isEmpty) {
+      return SearchOutcome(entries: entries, pinyinMatched: false);
+    }
+    final matchedIds = {for (final meta in entries) meta.id};
+    final pinyinMatched = _entries.any(
+      (entry) =>
+          matchedIds.contains(entry.meta.id) &&
+          entry.isPinyinTitleMatch(tokens),
+    );
+    return SearchOutcome(entries: entries, pinyinMatched: pinyinMatched);
+  }
+
+  /// 暴露分词逻辑，便于列表栏复用同一套关键词做命中高亮。
+  static List<String> tokenize(String query) => _tokenize(query);
+
   static List<String> _tokenize(String query) => query
       .toLowerCase()
       .trim()
@@ -89,6 +108,14 @@ class SearchIndexService {
           if (recentUse != 0) return recentUse;
           return a.position.compareTo(b.position);
         });
+}
+
+/// 列表栏搜索结果：排序后的条目，外加结果区是否应标注"拼音匹配"。
+class SearchOutcome {
+  final List<EntryMeta> entries;
+  final bool pinyinMatched;
+
+  const SearchOutcome({required this.entries, required this.pinyinMatched});
 }
 
 class _SearchHit {
@@ -184,6 +211,16 @@ class _IndexedEntry {
       return 2;
     }
     return null;
+  }
+
+  /// 标题通过拼音全拼或首字母命中，而非字面汉字命中时为真。
+  bool isPinyinTitleMatch(List<String> tokens) {
+    for (final token in tokens) {
+      final pinyinHit =
+          titlePinyin.contains(token) || titleInitials.contains(token);
+      if (pinyinHit && !title.contains(token)) return true;
+    }
+    return false;
   }
 }
 
