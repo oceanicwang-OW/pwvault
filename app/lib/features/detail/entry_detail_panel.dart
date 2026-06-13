@@ -44,6 +44,7 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
   Future<void> _copyPassword(String password) async {
     final clearAfter = ref.read(clipboardClearAfterProvider);
     await ref.read(clipboardServiceProvider).copyPassword(password);
+    if (!mounted) return; // 复制 await 期间可能因自动锁定/导航卸载
     _startFeedback(clearAfter);
   }
 

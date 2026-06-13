@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +15,27 @@ class _FakeClipboardGateway implements ClipboardGateway {
 
   @override
   Future<void> writeSensitiveText(String value) async {
+    writes.add(value);
+    _current = value;
+  }
+
+  @override
+  Future<String?> readText() async => _current;
+}
+
+/// 让首次写入阻塞在 [gate] 上，以便把面板卸载精确落在 copyPassword 的 await 中。
+class _BlockingClipboardGateway implements ClipboardGateway {
+  final gate = Completer<void>();
+  final List<String> writes = [];
+  String? _current;
+  var _blockedOnce = false;
+
+  @override
+  Future<void> writeSensitiveText(String value) async {
+    if (!_blockedOnce) {
+      _blockedOnce = true;
+      await gate.future;
+    }
     writes.add(value);
     _current = value;
   }
@@ -69,5 +92,40 @@ void main() {
 
     await tester.tap(find.byTooltip('隐藏密码'));
     await tester.pump();
+  });
+
+  testWidgets('unmounting during the copy await does not setState after dispose', (
+    tester,
+  ) async {
+    final gateway = _BlockingClipboardGateway();
+    final show = ValueNotifier(true);
+    addTearDown(show.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [clipboardGatewayProvider.overrideWithValue(gateway)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: show,
+              builder: (_, visible, _) =>
+                  visible ? const EntryDetailPanel() : const SizedBox(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('复制密码'));
+    await tester.pump(); // 推进到 copyPassword 的写入 await，阻塞在 gate 上
+
+    show.value = false; // 模拟自动锁定/导航：在 await 中卸载面板
+    await tester.pump(); // 卸载面板，dispose State
+
+    gateway.gate.complete(); // 放行写入，让复制的 await 继续
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(gateway.writes, [_mockPassword]);
   });
 }
