@@ -49,7 +49,7 @@ void main() {
 
     expect(find.byIcon(Icons.search), findsOneWidget);
     expect(find.byIcon(Icons.add), findsOneWidget);
-    expect(find.text('拼音匹配 · 2 条结果'), findsOneWidget);
+    expect(find.text('全部条目 · 6 条'), findsOneWidget);
     expect(find.text('淘宝'), findsNWidgets(2));
     expect(find.text('天猫超市'), findsOneWidget);
     expect(find.text('5 分钟后自动锁定'), findsOneWidget);

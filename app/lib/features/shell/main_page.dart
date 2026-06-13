@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../list/entry_list_panel.dart';
 import '../unlock/unlock_page.dart';
 
 /// 主界面 Shell（T2.7）：桌面三栏布局，窄屏折叠侧边栏。
@@ -31,7 +32,7 @@ class MainPage extends StatelessWidget {
             child: Row(
               children: [
                 if (!compact) _VaultSidebar(colorScheme: colorScheme),
-                _EntryListColumn(colorScheme: colorScheme),
+                const EntryListPanel(),
                 const Expanded(child: _EntryDetailColumn()),
               ],
             ),
@@ -122,135 +123,6 @@ class _VaultSidebar extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EntryListColumn extends StatelessWidget {
-  const _EntryListColumn({required this.colorScheme});
-
-  final ColorScheme colorScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      key: const ValueKey('entry-list-column'),
-      width: 220,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          border: Border(right: BorderSide(color: colorScheme.outlineVariant)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search, size: 18),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              'tb',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: 3),
-                            Container(
-                              width: 1,
-                              height: 14,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    tooltip: '新建条目',
-                    onPressed: () {},
-                    icon: const Icon(Icons.add, size: 18),
-                  ),
-                ],
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                child: Text(
-                  '拼音匹配 · 2 条结果',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-            _EntryTile(
-              initial: '淘',
-              title: '淘宝',
-              subtitle: 'owen_dev@163.com',
-              selected: true,
-              background: const Color(0xFFFAECE7),
-              foreground: const Color(0xFF712B13),
-              colorScheme: colorScheme,
-            ),
-            _EntryTile(
-              initial: '天',
-              title: '天猫超市',
-              subtitle: '138****2046',
-              background: const Color(0xFFE1F5EE),
-              foreground: const Color(0xFF085041),
-              colorScheme: colorScheme,
-            ),
-            const Spacer(),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: colorScheme.outlineVariant),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.lock_clock_outlined,
-                      size: 15,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '5 分钟后自动锁定',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -486,73 +358,6 @@ class _TagRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EntryTile extends StatelessWidget {
-  const _EntryTile({
-    required this.initial,
-    required this.title,
-    required this.subtitle,
-    required this.background,
-    required this.foreground,
-    required this.colorScheme,
-    this.selected = false,
-  });
-
-  final String initial;
-  final String title;
-  final String subtitle;
-  final Color background;
-  final Color foreground;
-  final ColorScheme colorScheme;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: selected ? colorScheme.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          _Avatar(
-            initial: initial,
-            size: 32,
-            background: background,
-            foreground: foreground,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: selected ? colorScheme.onPrimaryContainer : null,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
