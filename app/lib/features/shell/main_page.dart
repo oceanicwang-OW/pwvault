@@ -22,7 +22,7 @@ class MainPage extends StatelessWidget {
           appBar: compact ? const _CompactAppBar() : null,
           drawer: compact
               ? Drawer(
-                  width: 172,
+                  width: 140,
                   child: _VaultSidebar(colorScheme: colorScheme),
                 )
               : null,
@@ -334,7 +334,7 @@ class _EntryDetailColumn extends StatelessWidget {
                   _FieldRow(
                     label: '网址',
                     value: 'taobao.com',
-                    valueColor: Color(0xFF185FA5),
+                    isLink: true,
                     trailingIcon: Icons.open_in_new,
                   ),
                   _FieldRow(label: '标签', tagValue: '个人', isLast: true),
@@ -344,7 +344,7 @@ class _EntryDetailColumn extends StatelessWidget {
             const SizedBox(height: 14),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xFFFAEEDA),
+                color: colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Padding(
@@ -354,28 +354,29 @@ class _EntryDetailColumn extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.content_paste_outlined,
                       size: 16,
-                      color: Color(0xFF854F0B),
+                      color: colorScheme.onTertiaryContainer,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '密码已复制，23 秒后自动清空剪贴板',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF854F0B),
+                          color: colorScheme.onTertiaryContainer,
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const SizedBox(
+                    SizedBox(
                       width: 60,
                       child: LinearProgressIndicator(
                         value: 0.7,
                         minHeight: 4,
-                        color: Color(0xFFBA7517),
-                        backgroundColor: Color(0xFFFAC775),
+                        color: colorScheme.onTertiaryContainer,
+                        backgroundColor: colorScheme.onTertiaryContainer
+                            .withValues(alpha: 0.24),
                       ),
                     ),
                   ],
@@ -518,7 +519,7 @@ class _EntryTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFE6F1FB) : Colors.transparent,
+        color: selected ? colorScheme.primaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -539,7 +540,7 @@ class _EntryTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: selected ? const Color(0xFF0C447C) : null,
+                    color: selected ? colorScheme.onPrimaryContainer : null,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -598,7 +599,7 @@ class _FieldRow extends StatelessWidget {
   const _FieldRow({
     required this.label,
     this.value,
-    this.valueColor,
+    this.isLink = false,
     this.trailingIcon,
     this.secondaryTrailingIcon,
     this.sensitive = false,
@@ -608,7 +609,7 @@ class _FieldRow extends StatelessWidget {
 
   final String label;
   final String? value;
-  final Color? valueColor;
+  final bool isLink;
   final IconData? trailingIcon;
   final IconData? secondaryTrailingIcon;
   final bool sensitive;
@@ -646,7 +647,7 @@ class _FieldRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: valueColor,
+                        color: isLink ? colorScheme.primary : null,
                         letterSpacing: sensitive ? 2 : 0,
                         fontFamily: sensitive ? 'monospace' : null,
                       ),
@@ -659,13 +660,13 @@ class _FieldRow extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEEEDFE),
+                          color: colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           tagValue!,
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: const Color(0xFF3C3489)),
+                              ?.copyWith(color: colorScheme.onSecondaryContainer),
                         ),
                       ),
                     ),
