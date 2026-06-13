@@ -2,33 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/search_index.dart';
 import '../../services/vault_service.dart';
+import '../edit/entry_edit_form.dart';
+import 'mock_entry_store.dart';
 
 /// 输入到过滤之间的防抖窗口（PDR 7.3：列表栏搜索 150ms debounce）。
 const _debounce = Duration(milliseconds: 150);
 
-/// 列表栏（T2.8）：搜索框（150ms debounce、Esc 清空）、命中高亮结果列表、
-/// "拼音匹配"标注与空态引导新建。
-///
-/// 当前数据为 mock，真实条目接入留待 T2.10 CRUD（替换 [_mockSeeds] 为
-/// `entryListProvider`）。
-class EntryListPanel extends StatefulWidget {
+/// 列表栏（T2.8 / T2.10）：搜索框（150ms debounce、Esc 清空）、命中高亮结果列表、
+/// "拼音匹配"标注、空态引导新建；条目来自共享 [mockEntryStoreProvider]，
+/// 新建/编辑保存后即时刷新。
+class EntryListPanel extends ConsumerStatefulWidget {
   const EntryListPanel({super.key});
 
   @override
-  State<EntryListPanel> createState() => _EntryListPanelState();
+  ConsumerState<EntryListPanel> createState() => _EntryListPanelState();
 }
 
-class _EntryListPanelState extends State<EntryListPanel> {
+class _EntryListPanelState extends ConsumerState<EntryListPanel> {
   final _controller = TextEditingController();
   final _searchFocus = FocusNode();
-  final _index = SearchIndexService.fromEntries(_mockEntries);
 
   Timer? _debounceTimer;
   String _query = '';
-  late String? _selectedId = _mockEntries.first.id;
+  String? _selectedId;
 
   @override
   void dispose() {
@@ -55,7 +55,10 @@ class _EntryListPanelState extends State<EntryListPanel> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final outcome = _index.searchDetailed(_query);
+    final entries = ref.watch(mockEntryStoreProvider);
+    final outcome = SearchIndexService.fromEntries(
+      entries,
+    ).searchDetailed(_query);
     final tokens = SearchIndexService.tokenize(_query);
 
     return SizedBox(
@@ -72,7 +75,10 @@ class _EntryListPanelState extends State<EntryListPanel> {
             _resultHeader(context, outcome),
             Expanded(
               child: outcome.entries.isEmpty
-                  ? _EmptyResults(query: _query)
+                  ? _EmptyResults(
+                      query: _query,
+                      onCreate: () => showEntryEditDialog(context),
+                    )
                   : ListView.builder(
                       padding: EdgeInsets.zero,
                       itemCount: outcome.entries.length,
@@ -139,7 +145,7 @@ class _EntryListPanelState extends State<EntryListPanel> {
           const SizedBox(width: 8),
           IconButton.outlined(
             tooltip: '新建条目',
-            onPressed: () {},
+            onPressed: () => showEntryEditDialog(context),
             icon: const Icon(Icons.add, size: 18),
           ),
         ],
@@ -167,9 +173,9 @@ class _EntryListPanelState extends State<EntryListPanel> {
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -300,7 +306,8 @@ class _ResultTile extends StatelessWidget {
                             text: span.text,
                             style: span.hit
                                 ? TextStyle(
-                                    backgroundColor: colorScheme.tertiaryContainer,
+                                    backgroundColor:
+                                        colorScheme.tertiaryContainer,
                                     color: colorScheme.onTertiaryContainer,
                                   )
                                 : null,
@@ -330,9 +337,10 @@ class _ResultTile extends StatelessWidget {
 }
 
 class _EmptyResults extends StatelessWidget {
-  const _EmptyResults({required this.query});
+  const _EmptyResults({required this.query, required this.onCreate});
 
   final String query;
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -349,10 +357,7 @@ class _EmptyResults extends StatelessWidget {
               color: colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 10),
-            Text(
-              '未找到匹配条目',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text('未找到匹配条目', style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 4),
             Text(
               '换个关键词，或新建一条',
@@ -363,7 +368,7 @@ class _EmptyResults extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FilledButton.tonalIcon(
-              onPressed: () {},
+              onPressed: onCreate,
               icon: const Icon(Icons.add, size: 18),
               label: Text(query.isEmpty ? '新建条目' : '新建「$query」'),
             ),
@@ -418,66 +423,3 @@ class _Avatar extends StatelessWidget {
   ];
   return palette[id.hashCode.abs() % palette.length];
 }
-
-EntryMeta _mockMeta(
-  String id,
-  String title, {
-  required String username,
-  required String url,
-  required List<String> tags,
-}) => EntryMeta(
-  id: id,
-  title: title,
-  username: username,
-  url: url,
-  tags: tags,
-  favorite: false,
-  hasTotp: false,
-  createdAt: 0,
-  updatedAt: 0,
-);
-
-final List<EntryMeta> _mockEntries = [
-  _mockMeta(
-    'taobao',
-    '淘宝',
-    username: 'owen_dev@163.com',
-    url: 'taobao.com',
-    tags: const ['个人'],
-  ),
-  _mockMeta(
-    'tmall',
-    '天猫超市',
-    username: '138****2046',
-    url: 'tmall.com',
-    tags: const ['个人'],
-  ),
-  _mockMeta(
-    'jd',
-    '京东',
-    username: 'owen@jd.com',
-    url: 'jd.com',
-    tags: const ['购物'],
-  ),
-  _mockMeta(
-    'github',
-    'GitHub',
-    username: 'oceanicwang',
-    url: 'github.com',
-    tags: const ['工作'],
-  ),
-  _mockMeta(
-    'wechat',
-    '微信',
-    username: 'wxid_owen',
-    url: 'weixin.qq.com',
-    tags: const ['社交'],
-  ),
-  _mockMeta(
-    'cmb',
-    '招商银行',
-    username: '6225****8899',
-    url: 'cmbchina.com',
-    tags: const ['金融'],
-  ),
-];
