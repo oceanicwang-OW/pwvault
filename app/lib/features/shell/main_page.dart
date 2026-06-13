@@ -1,45 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/shortcuts.dart';
 import '../detail/entry_detail_panel.dart';
 import '../list/entry_list_panel.dart';
 import '../unlock/unlock_page.dart';
 
-/// 主界面 Shell（T2.7）：桌面三栏布局，窄屏折叠侧边栏。
-class MainPage extends StatelessWidget {
+/// 主界面 Shell（T2.7 / T2.11）：桌面三栏布局，窄屏折叠侧边栏，挂载全局快捷键。
+class MainPage extends ConsumerWidget {
   const MainPage({super.key});
 
   static const path = '/main';
   static const _compactBreakpoint = 900.0;
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < _compactBreakpoint;
-        final colorScheme = Theme.of(context).colorScheme;
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Shortcuts(
+      shortcuts: appShortcuts(),
+      child: Actions(
+        actions: buildAppActions(ref, context),
+        // autofocus 让无控件聚焦时按键也能命中全局快捷键。
+        child: Focus(
+          autofocus: true,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < _compactBreakpoint;
+              final colorScheme = Theme.of(context).colorScheme;
 
-        return Scaffold(
-          backgroundColor: colorScheme.surface,
-          appBar: compact ? const _CompactAppBar() : null,
-          drawer: compact
-              ? Drawer(
-                  width: 140,
-                  child: _VaultSidebar(colorScheme: colorScheme),
-                )
-              : null,
-          body: SafeArea(
-            top: !compact,
-            child: Row(
-              children: [
-                if (!compact) _VaultSidebar(colorScheme: colorScheme),
-                const EntryListPanel(),
-                const Expanded(child: EntryDetailPanel()),
-              ],
-            ),
+              return Scaffold(
+                backgroundColor: colorScheme.surface,
+                appBar: compact ? const _CompactAppBar() : null,
+                drawer: compact
+                    ? Drawer(
+                        width: 140,
+                        child: _VaultSidebar(colorScheme: colorScheme),
+                      )
+                    : null,
+                body: SafeArea(
+                  top: !compact,
+                  child: Row(
+                    children: [
+                      if (!compact) _VaultSidebar(colorScheme: colorScheme),
+                      const EntryListPanel(),
+                      const Expanded(child: EntryDetailPanel()),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

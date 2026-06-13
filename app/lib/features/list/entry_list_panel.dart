@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/search_index.dart';
 import '../../services/vault_service.dart';
 import '../edit/entry_edit_form.dart';
-import 'mock_entry_store.dart';
+import 'list_providers.dart';
 
 /// 输入到过滤之间的防抖窗口（PDR 7.3：列表栏搜索 150ms debounce）。
 const _debounce = Duration(milliseconds: 150);
@@ -24,42 +24,39 @@ class EntryListPanel extends ConsumerStatefulWidget {
 
 class _EntryListPanelState extends ConsumerState<EntryListPanel> {
   final _controller = TextEditingController();
-  final _searchFocus = FocusNode();
 
   Timer? _debounceTimer;
-  String _query = '';
-  String? _selectedId;
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
     _controller.dispose();
-    _searchFocus.dispose();
     super.dispose();
   }
 
   void _onQueryChanged(String value) {
+    setState(() {}); // 刷新清除按钮显隐
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_debounce, () {
       if (!mounted) return;
-      setState(() => _query = value.trim());
+      ref.read(searchQueryProvider.notifier).set(value.trim());
     });
   }
 
   void _clearQuery() {
     _debounceTimer?.cancel();
     _controller.clear();
-    setState(() => _query = '');
+    ref.read(searchQueryProvider.notifier).set('');
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final entries = ref.watch(mockEntryStoreProvider);
-    final outcome = SearchIndexService.fromEntries(
-      entries,
-    ).searchDetailed(_query);
-    final tokens = SearchIndexService.tokenize(_query);
+    final query = ref.watch(searchQueryProvider);
+    final outcome = ref.watch(searchOutcomeProvider);
+    final tokens = SearchIndexService.tokenize(query);
+    final selectedId = ref.watch(selectedEntryIdProvider);
 
     return SizedBox(
       key: const ValueKey('entry-list-column'),
@@ -76,7 +73,7 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
             Expanded(
               child: outcome.entries.isEmpty
                   ? _EmptyResults(
-                      query: _query,
+                      query: query,
                       onCreate: () => showEntryEditDialog(context),
                     )
                   : ListView.builder(
@@ -87,9 +84,11 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
                         return _ResultTile(
                           meta: meta,
                           tokens: tokens,
-                          selected: meta.id == _selectedId,
+                          selected: meta.id == selectedId,
                           colorScheme: colorScheme,
-                          onTap: () => setState(() => _selectedId = meta.id),
+                          onTap: () => ref
+                              .read(selectedEntryIdProvider.notifier)
+                              .select(meta.id),
                         );
                       },
                     ),
@@ -115,7 +114,7 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
                 height: 40,
                 child: TextField(
                   controller: _controller,
-                  focusNode: _searchFocus,
+                  focusNode: ref.watch(listSearchFocusProvider),
                   onChanged: _onQueryChanged,
                   textInputAction: TextInputAction.search,
                   style: Theme.of(context).textTheme.bodyMedium,
@@ -157,7 +156,7 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
     final colorScheme = Theme.of(context).colorScheme;
     final count = outcome.entries.length;
     final String label;
-    if (_query.isEmpty) {
+    if (ref.read(searchQueryProvider).isEmpty) {
       label = '全部条目 · $count 条';
     } else if (count == 0) {
       label = '无匹配结果';
