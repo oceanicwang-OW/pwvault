@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pwvault/features/shell/main_page.dart';
 
@@ -15,7 +16,9 @@ void main() {
       view.resetPhysicalSize();
     });
 
-    await tester.pumpWidget(const MaterialApp(home: MainPage()));
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: MainPage())),
+    );
   }
 
   testWidgets('desktop shell renders fixed sidebar and list columns', (
@@ -57,7 +60,7 @@ void main() {
     expect(find.text('用户名'), findsOneWidget);
     expect(find.text('密码'), findsOneWidget);
     expect(find.text('网址'), findsOneWidget);
-    expect(find.text('密码已复制，23 秒后自动清空剪贴板'), findsOneWidget);
+    expect(find.text('••••••••'), findsOneWidget);
   });
 
   testWidgets('narrow shell collapses sidebar into a hamburger drawer', (
