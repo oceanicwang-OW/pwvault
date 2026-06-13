@@ -19,6 +19,7 @@ use std::sync::Mutex;
 
 use flutter_rust_bridge::frb;
 
+use crate::password_gen;
 use crate::secret::SecretString;
 use crate::session::{Session, SessionError};
 use crate::store::{EntryMeta, EntryPlain, StoreError};
@@ -28,6 +29,31 @@ use crate::vault::VaultError;
 #[frb(sync)]
 pub fn ping() -> String {
     format!("core_crypto {}", env!("CARGO_PKG_VERSION"))
+}
+
+#[derive(Debug, Clone)]
+pub struct GenOptions {
+    pub length: u8,
+    pub uppercase: bool,
+    pub lowercase: bool,
+    pub numbers: bool,
+    pub symbols: bool,
+    pub exclude_ambiguous: bool,
+}
+
+pub fn generate_password(opts: GenOptions) -> Result<String, String> {
+    password_gen::generate_password(password_gen::PasswordGenOptions {
+        length: opts.length,
+        uppercase: opts.uppercase,
+        lowercase: opts.lowercase,
+        numbers: opts.numbers,
+        symbols: opts.symbols,
+        exclude_ambiguous: opts.exclude_ambiguous,
+    })
+}
+
+pub fn generate_passphrase(words: u8, sep: String) -> Result<String, String> {
+    password_gen::generate_passphrase(words, sep)
 }
 
 /// 条目明文（FFI 输入/输出，全部字段为普通 String）。
@@ -186,6 +212,34 @@ mod tests {
     #[test]
     fn ping_returns_crate_version() {
         assert_eq!(ping(), format!("core_crypto {}", env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn ffi_generate_password_delegates_to_generator() {
+        let password = generate_password(GenOptions {
+            length: 24,
+            uppercase: true,
+            lowercase: true,
+            numbers: true,
+            symbols: false,
+            exclude_ambiguous: true,
+        })
+        .unwrap();
+
+        assert_eq!(password.len(), 24);
+        assert!(password.chars().all(|c| c.is_ascii_alphanumeric()));
+        assert!(!password.chars().any(|c| "0O1lI".contains(c)));
+    }
+
+    #[test]
+    fn ffi_generate_passphrase_delegates_to_generator() {
+        assert_eq!(
+            generate_passphrase(4, " ".into())
+                .unwrap()
+                .split(' ')
+                .count(),
+            4
+        );
     }
 
     fn fast_create(path: &std::path::Path) -> VaultHandle {

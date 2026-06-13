@@ -8,10 +8,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'store.dart';
 
 // These functions are ignored because they are not marked as `pub`: `emap`, `from_plain`, `lock`, `wrap`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`
 
 /// 连通性探针：返回 crate 名与版本，供三端验证 FFI 链路。
 String ping() => RustLib.instance.api.crateApiPing();
+
+Future<String> generatePassword({required GenOptions opts}) =>
+    RustLib.instance.api.crateApiGeneratePassword(opts: opts);
+
+Future<String> generatePassphrase({required int words, required String sep}) =>
+    RustLib.instance.api.crateApiGeneratePassphrase(words: words, sep: sep);
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<VaultHandle>>
 abstract class VaultHandle implements RustOpaqueInterface {
@@ -112,4 +118,43 @@ class EntryDraft {
           totpUri == other.totpUri &&
           tags == other.tags &&
           favorite == other.favorite;
+}
+
+class GenOptions {
+  final int length;
+  final bool uppercase;
+  final bool lowercase;
+  final bool numbers;
+  final bool symbols;
+  final bool excludeAmbiguous;
+
+  const GenOptions({
+    required this.length,
+    required this.uppercase,
+    required this.lowercase,
+    required this.numbers,
+    required this.symbols,
+    required this.excludeAmbiguous,
+  });
+
+  @override
+  int get hashCode =>
+      length.hashCode ^
+      uppercase.hashCode ^
+      lowercase.hashCode ^
+      numbers.hashCode ^
+      symbols.hashCode ^
+      excludeAmbiguous.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GenOptions &&
+          runtimeType == other.runtimeType &&
+          length == other.length &&
+          uppercase == other.uppercase &&
+          lowercase == other.lowercase &&
+          numbers == other.numbers &&
+          symbols == other.symbols &&
+          excludeAmbiguous == other.excludeAmbiguous;
 }

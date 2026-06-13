@@ -3,6 +3,7 @@ pub(crate) mod b64;
 pub mod cipher;
 mod frb_generated;
 pub mod kdf;
+pub mod password_gen;
 pub mod persist;
 pub mod secret;
 pub mod session;

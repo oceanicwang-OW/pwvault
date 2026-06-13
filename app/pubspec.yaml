@@ -16,6 +16,7 @@ dependencies:
   pinyin: ^3.3.0
   rust_lib_pwvault:
     path: rust_builder
+  zxcvbn: ^1.0.0
 
 dev_dependencies:
   fake_async: ^1.3.3

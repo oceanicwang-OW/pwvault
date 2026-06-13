@@ -65,7 +65,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1841108333;
+  int get rustContentHash => -11515255;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -127,6 +127,13 @@ abstract class RustLibApi extends BaseApi {
     required VaultHandle that,
     required EntryDraft draft,
   });
+
+  Future<String> crateApiGeneratePassphrase({
+    required int words,
+    required String sep,
+  });
+
+  Future<String> crateApiGeneratePassword({required GenOptions opts});
 
   String crateApiPing();
 
@@ -551,12 +558,74 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<String> crateApiGeneratePassphrase({
+    required int words,
+    required String sep,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(words, serializer);
+          sse_encode_String(sep, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiGeneratePassphraseConstMeta,
+        argValues: [words, sep],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGeneratePassphraseConstMeta => const TaskConstMeta(
+    debugName: "generate_passphrase",
+    argNames: ["words", "sep"],
+  );
+
+  @override
+  Future<String> crateApiGeneratePassword({required GenOptions opts}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_gen_options(opts, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiGeneratePasswordConstMeta,
+        argValues: [opts],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGeneratePasswordConstMeta =>
+      const TaskConstMeta(debugName: "generate_password", argNames: ["opts"]);
+
+  @override
   String crateApiPing() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -626,6 +695,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GenOptions dco_decode_box_autoadd_gen_options(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_gen_options(raw);
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
@@ -667,6 +742,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       createdAt: dco_decode_i_64(arr[7]),
       updatedAt: dco_decode_i_64(arr[8]),
       deletedAt: dco_decode_opt_box_autoadd_i_64(arr[9]),
+    );
+  }
+
+  @protected
+  GenOptions dco_decode_gen_options(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return GenOptions(
+      length: dco_decode_u_8(arr[0]),
+      uppercase: dco_decode_bool(arr[1]),
+      lowercase: dco_decode_bool(arr[2]),
+      numbers: dco_decode_bool(arr[3]),
+      symbols: dco_decode_bool(arr[4]),
+      excludeAmbiguous: dco_decode_bool(arr[5]),
     );
   }
 
@@ -780,6 +871,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  GenOptions sse_decode_box_autoadd_gen_options(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_gen_options(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
@@ -834,6 +931,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       createdAt: var_createdAt,
       updatedAt: var_updatedAt,
       deletedAt: var_deletedAt,
+    );
+  }
+
+  @protected
+  GenOptions sse_decode_gen_options(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_length = sse_decode_u_8(deserializer);
+    var var_uppercase = sse_decode_bool(deserializer);
+    var var_lowercase = sse_decode_bool(deserializer);
+    var var_numbers = sse_decode_bool(deserializer);
+    var var_symbols = sse_decode_bool(deserializer);
+    var var_excludeAmbiguous = sse_decode_bool(deserializer);
+    return GenOptions(
+      length: var_length,
+      uppercase: var_uppercase,
+      lowercase: var_lowercase,
+      numbers: var_numbers,
+      symbols: var_symbols,
+      excludeAmbiguous: var_excludeAmbiguous,
     );
   }
 
@@ -980,6 +1096,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_gen_options(
+    GenOptions self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_gen_options(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -1015,6 +1140,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.createdAt, serializer);
     sse_encode_i_64(self.updatedAt, serializer);
     sse_encode_opt_box_autoadd_i_64(self.deletedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_gen_options(GenOptions self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.length, serializer);
+    sse_encode_bool(self.uppercase, serializer);
+    sse_encode_bool(self.lowercase, serializer);
+    sse_encode_bool(self.numbers, serializer);
+    sse_encode_bool(self.symbols, serializer);
+    sse_encode_bool(self.excludeAmbiguous, serializer);
   }
 
   @protected

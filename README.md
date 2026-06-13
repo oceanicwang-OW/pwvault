@@ -8,7 +8,7 @@ PwVault 是一个本地优先的私人密码管理器。项目目标是把账号
 
 - 本地优先：离线可用，同步不是使用前提。
 - 零知识加密：主密码不落盘，库文件离开主密码不可解密。
-- 跨平台客户端：优先支持 Windows、macOS、iOS，后续可扩展 Android/Linux。
+- 跨平台客户端：优先支持 Windows、macOS、iOS，后续可按需扩展 Linux。
 - 可维护核心：密码学、持久化和合并逻辑集中在 Rust 层，Flutter 负责交互和状态管理。
 
 完整产品设计文档见 [docs/password-manager-pdr.html](docs/password-manager-pdr.html)。
@@ -62,7 +62,7 @@ GitHub Actions 已配置：
 
 ## 开发进度
 
-按提交记录，当前主线已推进到 **M2 桌面 MVP 的 T2.4：ClipboardService**。下一项顺序任务是 **T2.5：PasswordGeneratorService**；UI 层的 T2.6/T2.7 还没有正式实现，目前只有占位页面。
+当前开发已推进到 **M2 桌面 MVP 的 T2.5：PasswordGeneratorService**。下一项顺序任务是 **T2.6：解锁页**；UI 层的 T2.6/T2.7 还没有正式实现，目前只有占位页面。
 
 | 任务 | 状态 | 最近提交 | 说明 |
 | --- | --- | --- | --- |
@@ -81,7 +81,7 @@ GitHub Actions 已配置：
 | T2.2 SearchIndexService | 已完成 | `2436249`, `cd91f55` | 拼音/首字母搜索、多关键词匹配、排序与验证修复。 |
 | T2.3 AutoLockService | 已完成 | `6c235c3` | 空闲计时和超时锁定服务。 |
 | T2.4 ClipboardService | 已完成 | `6e8bce3` | 复制密码后定时清理，清理前校验剪贴板内容是否被用户覆盖。 |
-| T2.5 PasswordGeneratorService | 未开始 | - | 密码/口令生成与强度评估尚未接入。 |
+| T2.5 PasswordGeneratorService | 已完成 | 当前分支 | Rust CSPRNG 密码/短语生成、Dart 服务封装、zxcvbn 强度评估已接入。 |
 | T2.6 解锁页 | 未开始 | - | 现有页面仍是占位按钮。 |
 | T2.7 桌面三栏主界面 | 未开始 | - | 现有主界面仍是占位页。 |
 | T3+ 移动端、同步、导入导出、发布 | 未开始 | - | PDR 中已有规划，代码层暂未实现。 |

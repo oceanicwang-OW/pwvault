@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1841108333;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -11515255;
 
 // Section: executor
 
@@ -569,6 +569,73 @@ fn wire__crate__api__VaultHandle_upsert_impl(
         },
     )
 }
+fn wire__crate__api__generate_passphrase_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "generate_passphrase",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_words = <u8>::sse_decode(&mut deserializer);
+            let api_sep = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::generate_passphrase(api_words, api_sep)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__generate_password_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "generate_password",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_opts = <crate::api::GenOptions>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::generate_password(api_opts)?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__ping_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -696,6 +763,26 @@ impl SseDecode for crate::store::EntryMeta {
     }
 }
 
+impl SseDecode for crate::api::GenOptions {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_length = <u8>::sse_decode(deserializer);
+        let mut var_uppercase = <bool>::sse_decode(deserializer);
+        let mut var_lowercase = <bool>::sse_decode(deserializer);
+        let mut var_numbers = <bool>::sse_decode(deserializer);
+        let mut var_symbols = <bool>::sse_decode(deserializer);
+        let mut var_excludeAmbiguous = <bool>::sse_decode(deserializer);
+        return crate::api::GenOptions {
+            length: var_length,
+            uppercase: var_uppercase,
+            lowercase: var_lowercase,
+            numbers: var_numbers,
+            symbols: var_symbols,
+            exclude_ambiguous: var_excludeAmbiguous,
+        };
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -807,6 +894,8 @@ fn pde_ffi_dispatcher_primary_impl(
         9 => wire__crate__api__VaultHandle_soft_delete_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__VaultHandle_unlock_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__VaultHandle_upsert_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__generate_passphrase_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__generate_password_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -819,7 +908,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        12 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__ping_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -888,6 +977,26 @@ impl flutter_rust_bridge::IntoIntoDart<crate::store::EntryMeta> for crate::store
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::GenOptions {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.length.into_into_dart().into_dart(),
+            self.uppercase.into_into_dart().into_dart(),
+            self.lowercase.into_into_dart().into_dart(),
+            self.numbers.into_into_dart().into_dart(),
+            self.symbols.into_into_dart().into_dart(),
+            self.exclude_ambiguous.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::GenOptions {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::GenOptions> for crate::api::GenOptions {
+    fn into_into_dart(self) -> crate::api::GenOptions {
+        self
+    }
+}
 
 impl SseEncode for VaultHandle {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -949,6 +1058,18 @@ impl SseEncode for crate::store::EntryMeta {
         <i64>::sse_encode(self.created_at, serializer);
         <i64>::sse_encode(self.updated_at, serializer);
         <Option<i64>>::sse_encode(self.deleted_at, serializer);
+    }
+}
+
+impl SseEncode for crate::api::GenOptions {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u8>::sse_encode(self.length, serializer);
+        <bool>::sse_encode(self.uppercase, serializer);
+        <bool>::sse_encode(self.lowercase, serializer);
+        <bool>::sse_encode(self.numbers, serializer);
+        <bool>::sse_encode(self.symbols, serializer);
+        <bool>::sse_encode(self.exclude_ambiguous, serializer);
     }
 }
 

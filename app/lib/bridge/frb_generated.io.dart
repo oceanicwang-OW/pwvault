@@ -51,6 +51,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EntryDraft dco_decode_box_autoadd_entry_draft(dynamic raw);
 
   @protected
+  GenOptions dco_decode_box_autoadd_gen_options(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
@@ -58,6 +61,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EntryMeta dco_decode_entry_meta(dynamic raw);
+
+  @protected
+  GenOptions dco_decode_gen_options(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -114,6 +120,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EntryDraft sse_decode_box_autoadd_entry_draft(SseDeserializer deserializer);
 
   @protected
+  GenOptions sse_decode_box_autoadd_gen_options(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
@@ -121,6 +130,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EntryMeta sse_decode_entry_meta(SseDeserializer deserializer);
+
+  @protected
+  GenOptions sse_decode_gen_options(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -186,6 +198,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_gen_options(
+    GenOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
@@ -196,6 +214,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_entry_meta(EntryMeta self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_gen_options(GenOptions self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
