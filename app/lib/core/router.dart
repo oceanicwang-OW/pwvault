@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 
+import '../features/settings/settings_page.dart';
 import '../features/shell/main_page.dart';
 import '../features/unlock/unlock_page.dart';
 
@@ -9,5 +10,6 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(path: UnlockPage.path, builder: (_, _) => const UnlockPage()),
     GoRoute(path: MainPage.path, builder: (_, _) => const MainPage()),
+    GoRoute(path: SettingsPage.path, builder: (_, _) => const SettingsPage()),
   ],
 );
