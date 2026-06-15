@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../features/edit/entry_edit_form.dart';
 import '../features/list/list_providers.dart';
-import '../features/list/mock_entry_store.dart';
 import '../features/unlock/unlock_page.dart';
 import '../services/clipboard_service.dart';
+import '../services/vault_service.dart';
 
 /// 全局快捷键（T2.11）：Ctrl/Cmd+F 聚焦搜索、Ctrl/Cmd+L 锁定、Ctrl/Cmd+N 新建、
 /// Enter 复制选中条目密码、↑↓ 列表导航。
@@ -88,7 +88,10 @@ class _CopyPasswordAction extends Action<CopyPasswordIntent> {
   Object? invoke(CopyPasswordIntent intent) {
     final id = ref.read(selectedEntryIdProvider);
     if (id == null) return null;
-    ref.read(clipboardServiceProvider).copyPassword(mockPasswordFor(id));
+    () async {
+      final pw = await ref.read(vaultProvider.notifier).revealPassword(id);
+      await ref.read(clipboardServiceProvider).copyPassword(pw);
+    }();
     return null;
   }
 }

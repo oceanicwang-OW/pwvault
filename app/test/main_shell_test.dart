@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pwvault/features/list/list_providers.dart';
 import 'package:pwvault/features/shell/main_page.dart';
+import 'package:pwvault/services/vault_service.dart';
+
+import 'support/fake_vault.dart';
 
 void main() {
-  Future<void> pumpMainPage(
+  Future<ProviderContainer> pumpMainPage(
     WidgetTester tester, {
     required Size surfaceSize,
   }) async {
@@ -17,14 +21,30 @@ void main() {
     });
 
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: MainPage())),
+      ProviderScope(
+        overrides: [
+          vaultBackendProvider.overrideWithValue(FakeVaultBackend(demoSeeds())),
+        ],
+        child: const MaterialApp(home: MainPage()),
+      ),
     );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MainPage)),
+    );
+    await container.read(vaultProvider.notifier).unlock('p', 'pw');
+    await tester.pumpAndSettle();
+    return container;
   }
 
   testWidgets('desktop shell renders fixed sidebar and list columns', (
     tester,
   ) async {
-    await pumpMainPage(tester, surfaceSize: const Size(1200, 800));
+    final container = await pumpMainPage(
+      tester,
+      surfaceSize: const Size(1200, 800),
+    );
+    container.read(selectedEntryIdProvider.notifier).select('taobao');
+    await tester.pumpAndSettle();
 
     expect(find.text('PwVault — 主界面（占位）'), findsNothing);
     expect(find.text('列表 / 详情三栏布局由 T2.7 实现'), findsNothing);

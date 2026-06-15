@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pwvault/features/list/list_providers.dart';
-import 'package:pwvault/features/list/mock_entry_store.dart';
 import 'package:pwvault/features/shell/main_page.dart';
 import 'package:pwvault/features/unlock/unlock_page.dart';
 import 'package:pwvault/services/clipboard_service.dart';
+import 'package:pwvault/services/vault_service.dart';
+
+import 'support/fake_vault.dart';
 
 class _FakeClipboardGateway implements ClipboardGateway {
   final List<String> writes = [];
@@ -48,12 +50,20 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [clipboardGatewayProvider.overrideWithValue(gateway)],
+        overrides: [
+          clipboardGatewayProvider.overrideWithValue(gateway),
+          vaultBackendProvider.overrideWithValue(FakeVaultBackend(demoSeeds())),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
-    return ProviderScope.containerOf(tester.element(find.byType(MainPage)));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MainPage)),
+    );
+    await container.read(vaultProvider.notifier).unlock('p', 'pw');
+    await tester.pumpAndSettle();
+    return container;
   }
 
   Future<void> sendCtrl(WidgetTester tester, LogicalKeyboardKey key) async {
@@ -116,6 +126,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(gateway.writes, contains(mockPasswordFor('taobao')));
+    expect(gateway.writes, contains(demoPasswordFor('taobao')));
   });
 }

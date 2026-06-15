@@ -3,14 +3,25 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pwvault/features/list/entry_list_panel.dart';
+import 'package:pwvault/services/vault_service.dart';
+
+import 'support/fake_vault.dart';
 
 void main() {
   Future<void> pumpPanel(WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: Scaffold(body: EntryListPanel())),
+      ProviderScope(
+        overrides: [
+          vaultBackendProvider.overrideWithValue(FakeVaultBackend(demoSeeds())),
+        ],
+        child: const MaterialApp(home: Scaffold(body: EntryListPanel())),
       ),
     );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(EntryListPanel)),
+    );
+    await container.read(vaultProvider.notifier).unlock('p', 'pw');
+    await tester.pumpAndSettle();
   }
 
   group('highlightSpans', () {

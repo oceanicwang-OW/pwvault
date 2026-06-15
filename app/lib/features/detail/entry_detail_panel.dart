@@ -1,21 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/avatar.dart';
 import '../../services/clipboard_service.dart';
+import '../../services/vault_service.dart';
+import '../edit/entry_edit_form.dart';
+import '../list/list_providers.dart';
 import 'field_row.dart';
 import 'password_field_row.dart';
 
-// mock 条目（T2.10 接入真实选中条目与 entry_reveal_password 后替换）。
-const _mockTitle = '淘宝';
-const _mockInitial = '淘';
-const _mockUsername = 'owen_dev@163.com';
-const _mockUrl = 'taobao.com';
-const _mockTag = '个人';
-const _mockPassword = 'Tb#2024_demo!';
-
-/// 详情面板（T2.9）：FieldRow 字段区、密码行状态机、复制反馈倒计时条。
+/// 详情面板（T2.9 / 真实化）：展示左侧选中的条目，密码走单条目按需解密，
+/// 复制反馈倒计时条；未选中时显示空态。
 class EntryDetailPanel extends ConsumerStatefulWidget {
   const EntryDetailPanel({super.key});
 
@@ -36,16 +34,34 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
     super.dispose();
   }
 
-  Future<String> _revealPassword() async {
-    // 对照 PDR 7.5：明文走单条目按需解密 entry_reveal_password（此处 mock）。
-    return _mockPassword;
-  }
-
   Future<void> _copyPassword(String password) async {
     final clearAfter = ref.read(clipboardClearAfterProvider);
     await ref.read(clipboardServiceProvider).copyPassword(password);
     if (!mounted) return; // 复制 await 期间可能因自动锁定/导航卸载
     _startFeedback(clearAfter);
+  }
+
+  Future<void> _copyUsername(String username) async {
+    await Clipboard.setData(ClipboardData(text: username));
+  }
+
+  /// 切换常用：取完整条目 → 翻转 favorite → 写回（真实 CRUD 更新）。
+  Future<void> _toggleFavorite(EntryMeta meta) async {
+    final notifier = ref.read(vaultProvider.notifier);
+    final full = await notifier.getFull(meta.id);
+    await notifier.upsert(
+      EntryDraft(
+        id: meta.id,
+        title: full.title,
+        username: full.username,
+        password: full.password,
+        url: full.url,
+        notes: full.notes,
+        totpUri: full.totpUri,
+        tags: full.tags,
+        favorite: !full.favorite,
+      ),
+    );
   }
 
   void _startFeedback(Duration clearAfter) {
@@ -70,102 +86,106 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final selectedId = ref.watch(selectedEntryIdProvider);
+    final entries = ref.watch(entryListProvider);
+    final meta = _findById(entries, selectedId);
 
     return DecoratedBox(
       key: const ValueKey('entry-detail-column'),
       decoration: BoxDecoration(color: colorScheme.surface),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(context, colorScheme),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  FieldRow(
-                    label: '用户名',
-                    value: const Text(_mockUsername),
-                    actions: [
-                      IconButton(
-                        tooltip: '用户名 复制',
-                        onPressed: () {},
-                        icon: const Icon(Icons.copy_outlined, size: 18),
-                      ),
-                    ],
-                  ),
-                  PasswordFieldRow(
-                    label: '密码',
-                    revealPassword: _revealPassword,
-                    onCopy: _copyPassword,
-                  ),
-                  FieldRow(
-                    label: '网址',
-                    value: Text(
-                      _mockUrl,
-                      style: TextStyle(color: colorScheme.primary),
-                    ),
-                    actions: [
-                      IconButton(
-                        tooltip: '打开网址',
-                        onPressed: () {},
-                        icon: const Icon(Icons.open_in_new, size: 18),
-                      ),
-                    ],
-                  ),
-                  FieldRow(
-                    label: '标签',
-                    isLast: true,
-                    value: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _mockTag,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: colorScheme.onSecondaryContainer,
-                              ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+      child: meta == null
+          ? _EmptyDetail(colorScheme: colorScheme)
+          : _content(context, colorScheme, meta),
+    );
+  }
+
+  Widget _content(
+    BuildContext context,
+    ColorScheme colorScheme,
+    EntryMeta meta,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _header(context, colorScheme, meta),
+          const SizedBox(height: 14),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
             ),
-            if (_showFeedback) ...[
-              const SizedBox(height: 14),
-              _CopyFeedbackBar(
-                remaining: _feedbackRemaining,
-                total: _feedbackTotal,
-                colorScheme: colorScheme,
-              ),
-            ],
+            child: Column(
+              children: [
+                FieldRow(
+                  label: '用户名',
+                  value: Text(meta.username.isEmpty ? '—' : meta.username),
+                  actions: [
+                    IconButton(
+                      tooltip: '用户名 复制',
+                      onPressed: meta.username.isEmpty
+                          ? null
+                          : () => _copyUsername(meta.username),
+                      icon: const Icon(Icons.copy_outlined, size: 18),
+                    ),
+                  ],
+                ),
+                PasswordFieldRow(
+                  key: ValueKey('pw-${meta.id}'),
+                  label: '密码',
+                  revealPassword: () =>
+                      ref.read(vaultProvider.notifier).revealPassword(meta.id),
+                  onCopy: _copyPassword,
+                ),
+                FieldRow(
+                  label: '网址',
+                  value: Text(
+                    meta.url.isEmpty ? '—' : meta.url,
+                    style: TextStyle(color: colorScheme.primary),
+                  ),
+                ),
+                FieldRow(
+                  label: '标签',
+                  isLast: true,
+                  value: meta.tags.isEmpty
+                      ? const Text('—')
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            for (final tag in meta.tags)
+                              _TagChip(label: tag, colorScheme: colorScheme),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+          if (_showFeedback) ...[
+            const SizedBox(height: 14),
+            _CopyFeedbackBar(
+              remaining: _feedbackRemaining,
+              total: _feedbackTotal,
+              colorScheme: colorScheme,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _header(BuildContext context, ColorScheme colorScheme) {
+  Widget _header(
+    BuildContext context,
+    ColorScheme colorScheme,
+    EntryMeta meta,
+  ) {
     return Row(
       children: [
-        const _Avatar(
-          initial: _mockInitial,
-          background: Color(0xFFFAECE7),
-          foreground: Color(0xFF712B13),
+        EntryAvatar(
+          id: meta.id,
+          initial: meta.title.characters.first,
+          size: 40,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -173,13 +193,13 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _mockTitle,
+                meta.title,
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               Text(
-                '修改于 3 天前',
+                _formatUpdated(meta.updatedAt),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -189,15 +209,92 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
         ),
         IconButton(
           tooltip: '编辑',
-          onPressed: () {},
+          onPressed: () => showEntryEditDialog(context, initial: meta),
           icon: const Icon(Icons.edit_outlined),
         ),
         IconButton(
-          tooltip: '常用',
-          onPressed: () {},
-          icon: const Icon(Icons.star_border_outlined),
+          tooltip: meta.favorite ? '取消常用' : '设为常用',
+          onPressed: () => _toggleFavorite(meta),
+          icon: Icon(
+            meta.favorite ? Icons.star : Icons.star_border_outlined,
+            color: meta.favorite ? colorScheme.primary : null,
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// 把 [int] 毫秒时间戳格式化为相对“修改于”文案。
+String _formatUpdated(int ms) {
+  if (ms <= 0) return '最近更新';
+  final diff = DateTime.now().millisecondsSinceEpoch - ms;
+  if (diff < 0) return '最近更新';
+  final minutes = diff ~/ 60000;
+  if (minutes < 1) return '刚刚更新';
+  if (minutes < 60) return '$minutes 分钟前更新';
+  final hours = minutes ~/ 60;
+  if (hours < 24) return '$hours 小时前更新';
+  return '${hours ~/ 24} 天前更新';
+}
+
+EntryMeta? _findById(List<EntryMeta> entries, String? id) {
+  if (id == null) return null;
+  for (final e in entries) {
+    if (e.id == id) return e;
+  }
+  return null;
+}
+
+class _EmptyDetail extends StatelessWidget {
+  const _EmptyDetail({required this.colorScheme});
+
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.touch_app_outlined,
+            size: 40,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '从左侧选择一个条目查看详情',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.label, required this.colorScheme});
+
+  final String label;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSecondaryContainer,
+        ),
+      ),
     );
   }
 }
@@ -251,38 +348,6 @@ class _CopyFeedbackBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.initial,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String initial;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        initial,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
         ),
       ),
     );

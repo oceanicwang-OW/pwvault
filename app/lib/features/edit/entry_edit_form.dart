@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/vault_service.dart';
-import '../list/mock_entry_store.dart';
 import 'password_generator_sheet.dart';
 import 'url_normalizer.dart';
 
-/// 打开新建/编辑条目对话框；保存后写入 [mockEntryStoreProvider]，列表即时刷新。
+/// 可选标签集合（暂为固定集；自定义标签留待后续）。
+const kTagOptions = <String>['工作', '个人', '金融', '购物', '社交'];
+
+/// 打开新建/编辑条目对话框；保存写入真实库（`VaultService.upsert`），列表即时刷新。
 Future<void> showEntryEditDialog(BuildContext context, {EntryMeta? initial}) {
   return showDialog<void>(
     context: context,
@@ -16,11 +18,11 @@ Future<void> showEntryEditDialog(BuildContext context, {EntryMeta? initial}) {
         constraints: const BoxConstraints(maxWidth: 460),
         child: EntryEditForm(
           initial: initial,
-          onSubmit: (draft) {
-            ProviderScope.containerOf(
+          onSubmit: (draft) async {
+            await ProviderScope.containerOf(
               ctx,
-            ).read(mockEntryStoreProvider.notifier).upsert(draft);
-            Navigator.of(ctx).pop();
+            ).read(vaultProvider.notifier).upsert(draft);
+            if (ctx.mounted) Navigator.of(ctx).pop();
           },
           onCancel: () => Navigator.of(ctx).pop(),
         ),
@@ -39,7 +41,7 @@ class EntryEditForm extends ConsumerStatefulWidget {
   });
 
   final EntryMeta? initial;
-  final ValueChanged<EntryDraft> onSubmit;
+  final Future<void> Function(EntryDraft draft) onSubmit;
   final VoidCallback onCancel;
 
   @override
@@ -62,6 +64,9 @@ class _EntryEditFormState extends ConsumerState<EntryEditForm> {
   late final String _url0;
   late final Set<String> _tags0;
   late final bool _favorite0;
+
+  bool _submitting = false;
+  String? _submitError;
 
   bool get _isEdit => widget.initial != null;
 
@@ -131,7 +136,8 @@ class _EntryEditFormState extends ConsumerState<EntryEditForm> {
     if (discard ?? false) widget.onCancel();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final draft = EntryDraft(
       id: widget.initial?.id,
@@ -143,7 +149,17 @@ class _EntryEditFormState extends ConsumerState<EntryEditForm> {
       tags: _tags.toList(),
       favorite: _favorite,
     );
-    widget.onSubmit(draft);
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
+    try {
+      await widget.onSubmit(draft);
+    } on VaultException catch (e) {
+      if (mounted) setState(() => _submitError = '保存失败：${e.message}');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _openGenerator() async {
@@ -230,7 +246,7 @@ class _EntryEditFormState extends ConsumerState<EntryEditForm> {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
-                        for (final tag in kMockTagOptions)
+                        for (final tag in kTagOptions)
                           FilterChip(
                             label: Text(tag),
                             selected: _tags.contains(tag),
@@ -251,13 +267,35 @@ class _EntryEditFormState extends ConsumerState<EntryEditForm> {
                 ),
               ),
             ),
+            if (_submitError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _submitError!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 13,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(onPressed: _attemptCancel, child: const Text('取消')),
+                TextButton(
+                  onPressed: _submitting ? null : _attemptCancel,
+                  child: const Text('取消'),
+                ),
                 const SizedBox(width: 8),
-                FilledButton(onPressed: _submit, child: const Text('保存')),
+                FilledButton(
+                  onPressed: _submitting ? null : _submit,
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('保存'),
+                ),
               ],
             ),
           ],

@@ -6,6 +6,8 @@ import 'package:pwvault/features/list/entry_list_panel.dart';
 import 'package:pwvault/services/password_gen.dart';
 import 'package:pwvault/services/vault_service.dart';
 
+import 'support/fake_vault.dart';
+
 const _generated = 'GENERATED-PW-123';
 
 class _FakeBackend implements PasswordGeneratorBackend {
@@ -23,9 +25,12 @@ class _FakeBackend implements PasswordGeneratorBackend {
 Widget _host(Widget child) => ProviderScope(
   overrides: [
     passwordGeneratorBackendProvider.overrideWithValue(_FakeBackend()),
+    vaultBackendProvider.overrideWithValue(FakeVaultBackend(demoSeeds())),
   ],
   child: MaterialApp(home: Scaffold(body: child)),
 );
+
+Future<void> _noop(EntryDraft _) async {}
 
 void main() {
   testWidgets('blocks save and shows error when title is empty', (
@@ -33,7 +38,12 @@ void main() {
   ) async {
     EntryDraft? submitted;
     await tester.pumpWidget(
-      _host(EntryEditForm(onSubmit: (d) => submitted = d, onCancel: () {})),
+      _host(
+        EntryEditForm(
+          onSubmit: (d) async => submitted = d,
+          onCancel: () {},
+        ),
+      ),
     );
 
     await tester.tap(find.text('保存'));
@@ -48,7 +58,12 @@ void main() {
   ) async {
     EntryDraft? submitted;
     await tester.pumpWidget(
-      _host(EntryEditForm(onSubmit: (d) => submitted = d, onCancel: () {})),
+      _host(
+        EntryEditForm(
+          onSubmit: (d) async => submitted = d,
+          onCancel: () {},
+        ),
+      ),
     );
 
     await tester.enterText(find.widgetWithText(TextFormField, '标题 *'), '我的银行');
@@ -59,7 +74,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilterChip, '金融'));
     await tester.pump();
     await tester.tap(find.text('保存'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(submitted, isNotNull);
     expect(submitted!.title, '我的银行');
@@ -72,7 +87,7 @@ void main() {
   ) async {
     var cancelled = false;
     await tester.pumpWidget(
-      _host(EntryEditForm(onSubmit: (_) {}, onCancel: () => cancelled = true)),
+      _host(EntryEditForm(onSubmit: _noop, onCancel: () => cancelled = true)),
     );
 
     await tester.tap(find.text('取消'));
@@ -85,7 +100,7 @@ void main() {
   testWidgets('dirty cancel confirms before discarding', (tester) async {
     var cancelled = false;
     await tester.pumpWidget(
-      _host(EntryEditForm(onSubmit: (_) {}, onCancel: () => cancelled = true)),
+      _host(EntryEditForm(onSubmit: _noop, onCancel: () => cancelled = true)),
     );
 
     await tester.enterText(find.widgetWithText(TextFormField, '标题 *'), '草稿');
@@ -104,7 +119,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _host(EntryEditForm(onSubmit: (_) {}, onCancel: () {})),
+      _host(EntryEditForm(onSubmit: _noop, onCancel: () {})),
     );
 
     await tester.tap(find.byTooltip('生成密码'));
@@ -122,6 +137,11 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_host(const EntryListPanel()));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(EntryListPanel)),
+    );
+    await container.read(vaultProvider.notifier).unlock('p', 'pw');
+    await tester.pumpAndSettle();
 
     expect(find.text('全部条目 · 6 条'), findsOneWidget);
 
