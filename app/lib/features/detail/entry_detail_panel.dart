@@ -8,6 +8,7 @@ import '../../core/avatar.dart';
 import '../../services/clipboard_service.dart';
 import '../../services/vault_service.dart';
 import '../edit/entry_edit_form.dart';
+import '../list/entry_filter.dart';
 import '../list/list_providers.dart';
 import 'field_row.dart';
 import 'password_field_row.dart';
@@ -43,6 +44,16 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
 
   Future<void> _copyUsername(String username) async {
     await Clipboard.setData(ClipboardData(text: username));
+  }
+
+  Future<void> _delete(EntryMeta meta) async {
+    ref.read(selectedEntryIdProvider.notifier).select(null);
+    await ref.read(vaultProvider.notifier).softDelete(meta.id);
+  }
+
+  Future<void> _restore(EntryMeta meta) async {
+    ref.read(selectedEntryIdProvider.notifier).select(null);
+    await ref.read(vaultProvider.notifier).restore(meta.id);
   }
 
   /// 切换常用：取完整条目 → 翻转 favorite → 写回（真实 CRUD 更新）。
@@ -87,7 +98,8 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final selectedId = ref.watch(selectedEntryIdProvider);
-    final entries = ref.watch(entryListProvider);
+    final entries = ref.watch(viewEntriesProvider);
+    final inTrash = ref.watch(entryFilterProvider) is TrashFilter;
     final meta = _findById(entries, selectedId);
 
     return DecoratedBox(
@@ -95,21 +107,22 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
       decoration: BoxDecoration(color: colorScheme.surface),
       child: meta == null
           ? _EmptyDetail(colorScheme: colorScheme)
-          : _content(context, colorScheme, meta),
+          : _content(context, colorScheme, meta, inTrash: inTrash),
     );
   }
 
   Widget _content(
     BuildContext context,
     ColorScheme colorScheme,
-    EntryMeta meta,
-  ) {
+    EntryMeta meta, {
+    required bool inTrash,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _header(context, colorScheme, meta),
+          _header(context, colorScheme, meta, inTrash: inTrash),
           const SizedBox(height: 14),
           DecoratedBox(
             decoration: BoxDecoration(
@@ -178,8 +191,9 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
   Widget _header(
     BuildContext context,
     ColorScheme colorScheme,
-    EntryMeta meta,
-  ) {
+    EntryMeta meta, {
+    required bool inTrash,
+  }) {
     return Row(
       children: [
         EntryAvatar(
@@ -207,19 +221,32 @@ class _EntryDetailPanelState extends ConsumerState<EntryDetailPanel> {
             ],
           ),
         ),
-        IconButton(
-          tooltip: '编辑',
-          onPressed: () => showEntryEditDialog(context, initial: meta),
-          icon: const Icon(Icons.edit_outlined),
-        ),
-        IconButton(
-          tooltip: meta.favorite ? '取消常用' : '设为常用',
-          onPressed: () => _toggleFavorite(meta),
-          icon: Icon(
-            meta.favorite ? Icons.star : Icons.star_border_outlined,
-            color: meta.favorite ? colorScheme.primary : null,
+        if (inTrash)
+          IconButton(
+            tooltip: '恢复',
+            onPressed: () => _restore(meta),
+            icon: const Icon(Icons.restore_from_trash_outlined),
+          )
+        else ...[
+          IconButton(
+            tooltip: '编辑',
+            onPressed: () => showEntryEditDialog(context, initial: meta),
+            icon: const Icon(Icons.edit_outlined),
           ),
-        ),
+          IconButton(
+            tooltip: meta.favorite ? '取消常用' : '设为常用',
+            onPressed: () => _toggleFavorite(meta),
+            icon: Icon(
+              meta.favorite ? Icons.star : Icons.star_border_outlined,
+              color: meta.favorite ? colorScheme.primary : null,
+            ),
+          ),
+          IconButton(
+            tooltip: '删除（移到回收站）',
+            onPressed: () => _delete(meta),
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
       ],
     );
   }

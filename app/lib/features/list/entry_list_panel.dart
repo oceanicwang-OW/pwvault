@@ -8,6 +8,7 @@ import '../../core/avatar.dart';
 import '../../services/search_index.dart';
 import '../../services/vault_service.dart';
 import '../edit/entry_edit_form.dart';
+import 'entry_filter.dart';
 import 'list_providers.dart';
 
 /// 输入到过滤之间的防抖窗口（PDR 7.3：列表栏搜索 150ms debounce）。
@@ -75,6 +76,7 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
               child: outcome.entries.isEmpty
                   ? _EmptyResults(
                       query: query,
+                      filter: ref.watch(entryFilterProvider),
                       onCreate: () => showEntryEditDialog(context),
                     )
                   : ListView.builder(
@@ -158,7 +160,7 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
     final count = outcome.entries.length;
     final String label;
     if (ref.read(searchQueryProvider).isEmpty) {
-      label = '全部条目 · $count 条';
+      label = '${_filterLabel(ref.watch(entryFilterProvider))} · $count 条';
     } else if (count == 0) {
       label = '无匹配结果';
     } else if (outcome.pinyinMatched) {
@@ -210,6 +212,13 @@ class _EntryListPanelState extends ConsumerState<EntryListPanel> {
     );
   }
 }
+
+String _filterLabel(EntryFilter filter) => switch (filter) {
+  FavoritesFilter() => '常用',
+  TrashFilter() => '回收站',
+  TagFilter(:final tag) => '标签 $tag',
+  _ => '全部条目',
+};
 
 /// 把 [text] 按 [tokens] 的子串命中切成命中/未命中片段，供结果标题高亮。
 /// 大小写不敏感，多个 token 的命中区间会合并。
@@ -335,14 +344,51 @@ class _ResultTile extends StatelessWidget {
 }
 
 class _EmptyResults extends StatelessWidget {
-  const _EmptyResults({required this.query, required this.onCreate});
+  const _EmptyResults({
+    required this.query,
+    required this.filter,
+    required this.onCreate,
+  });
 
   final String query;
+  final EntryFilter filter;
   final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // 无搜索词的空视图：按过滤给出对应空态，回收站/常用不引导新建。
+    if (query.isEmpty) {
+      final (icon, text) = switch (filter) {
+        TrashFilter() => (Icons.delete_outline, '回收站为空'),
+        FavoritesFilter() => (Icons.star_border_outlined, '还没有常用条目'),
+        TagFilter(:final tag) => (Icons.sell_outlined, '没有「$tag」标签的条目'),
+        _ => (Icons.inbox_outlined, '保险库还没有条目'),
+      };
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 36, color: colorScheme.onSurfaceVariant),
+              const SizedBox(height: 10),
+              Text(text, style: Theme.of(context).textTheme.bodyMedium),
+              if (filter is AllEntriesFilter) ...[
+                const SizedBox(height: 12),
+                FilledButton.tonalIcon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('新建条目'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -368,7 +414,7 @@ class _EmptyResults extends StatelessWidget {
             FilledButton.tonalIcon(
               onPressed: onCreate,
               icon: const Icon(Icons.add, size: 18),
-              label: Text(query.isEmpty ? '新建条目' : '新建「$query」'),
+              label: Text('新建「$query」'),
             ),
           ],
         ),

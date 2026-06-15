@@ -63,7 +63,8 @@ void main() {
 
     expect(find.text('保险库'), findsOneWidget);
     expect(find.text('全部条目'), findsOneWidget);
-    expect(find.text('128'), findsOneWidget);
+    // 侧边栏「全部条目」计数为真实条目数（演示库 6 条）。
+    expect(find.text('6'), findsOneWidget);
     expect(find.text('常用'), findsOneWidget);
     expect(find.text('回收站'), findsOneWidget);
     expect(find.text('标签'), findsWidgets);
