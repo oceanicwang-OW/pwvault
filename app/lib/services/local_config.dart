@@ -4,21 +4,47 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 库外本地配置（PDR §5.4：最近库列表等，明文、不参与同步，不含任何敏感字段）。
+/// 库外本地配置（PDR §5.4：最近库列表、界面偏好等，明文、不参与同步，
+/// 不含任何敏感字段）。`themeMode` 取值 system/light/dark；时长为秒，null 表默认。
 class AppConfig {
   final List<String> recentVaults;
+  final String? themeMode;
+  final int? autoLockSeconds;
+  final int? clipboardSeconds;
 
-  const AppConfig({this.recentVaults = const []});
+  const AppConfig({
+    this.recentVaults = const [],
+    this.themeMode,
+    this.autoLockSeconds,
+    this.clipboardSeconds,
+  });
 
-  AppConfig copyWith({List<String>? recentVaults}) =>
-      AppConfig(recentVaults: recentVaults ?? this.recentVaults);
+  AppConfig copyWith({
+    List<String>? recentVaults,
+    String? themeMode,
+    int? autoLockSeconds,
+    int? clipboardSeconds,
+  }) => AppConfig(
+    recentVaults: recentVaults ?? this.recentVaults,
+    themeMode: themeMode ?? this.themeMode,
+    autoLockSeconds: autoLockSeconds ?? this.autoLockSeconds,
+    clipboardSeconds: clipboardSeconds ?? this.clipboardSeconds,
+  );
 
-  Map<String, dynamic> toJson() => {'recentVaults': recentVaults};
+  Map<String, dynamic> toJson() => {
+    'recentVaults': recentVaults,
+    if (themeMode != null) 'themeMode': themeMode,
+    if (autoLockSeconds != null) 'autoLockSeconds': autoLockSeconds,
+    if (clipboardSeconds != null) 'clipboardSeconds': clipboardSeconds,
+  };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
     recentVaults:
         (json['recentVaults'] as List?)?.whereType<String>().toList() ??
         const [],
+    themeMode: json['themeMode'] as String?,
+    autoLockSeconds: (json['autoLockSeconds'] as num?)?.toInt(),
+    clipboardSeconds: (json['clipboardSeconds'] as num?)?.toInt(),
   );
 }
 
@@ -76,14 +102,9 @@ class AppConfigNotifier extends AsyncNotifier<AppConfig> {
     }
   }
 
-  /// 记录最近打开的库：去重、置顶、限长，并持久化（失败不阻断）。
-  Future<void> recordVault(String path) async {
-    final current = state.asData?.value ?? const AppConfig();
-    final recents = [
-      path,
-      ...current.recentVaults.where((p) => p != path),
-    ].take(_maxRecentVaults).toList();
-    final config = current.copyWith(recentVaults: recents);
+  /// 应用变更并持久化：内存态先更新，落盘失败静默忽略（不阻断）。
+  Future<void> _mutate(AppConfig Function(AppConfig) transform) async {
+    final config = transform(state.asData?.value ?? const AppConfig());
     state = AsyncData(config);
     try {
       await _store.save(config);
@@ -91,4 +112,23 @@ class AppConfigNotifier extends AsyncNotifier<AppConfig> {
       // 内存态已更新；持久化失败静默忽略。
     }
   }
+
+  /// 记录最近打开的库：去重、置顶、限长。
+  Future<void> recordVault(String path) => _mutate(
+    (c) => c.copyWith(
+      recentVaults: [
+        path,
+        ...c.recentVaults.where((p) => p != path),
+      ].take(_maxRecentVaults).toList(),
+    ),
+  );
+
+  Future<void> setThemeMode(String mode) =>
+      _mutate((c) => c.copyWith(themeMode: mode));
+
+  Future<void> setAutoLockSeconds(int seconds) =>
+      _mutate((c) => c.copyWith(autoLockSeconds: seconds));
+
+  Future<void> setClipboardSeconds(int seconds) =>
+      _mutate((c) => c.copyWith(clipboardSeconds: seconds));
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../services/autolock_service.dart';
 import '../../services/clipboard_service.dart';
+import '../../services/local_config.dart';
 import '../shell/main_page.dart';
 import 'change_password_section.dart';
 
@@ -178,8 +181,13 @@ class _ThemeSection extends ConsumerWidget {
               ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
             ],
             selected: {mode},
-            onSelectionChanged: (selection) =>
-                ref.read(themeModeProvider.notifier).set(selection.first),
+            onSelectionChanged: (selection) {
+              final next = selection.first;
+              ref.read(themeModeProvider.notifier).set(next);
+              unawaited(
+                ref.read(appConfigProvider.notifier).setThemeMode(next.name),
+              );
+            },
           ),
         ),
       ],
@@ -206,6 +214,11 @@ class _SecuritySection extends ConsumerWidget {
             onChanged: (value) {
               if (value != null) {
                 ref.read(autoLockTimeoutProvider.notifier).setTimeout(value);
+                unawaited(
+                  ref
+                      .read(appConfigProvider.notifier)
+                      .setAutoLockSeconds(value.inSeconds),
+                );
               }
             },
             items: [
@@ -224,6 +237,11 @@ class _SecuritySection extends ConsumerWidget {
                 ref
                     .read(clipboardClearAfterProvider.notifier)
                     .setClearAfter(value);
+                unawaited(
+                  ref
+                      .read(appConfigProvider.notifier)
+                      .setClipboardSeconds(value.inSeconds),
+                );
               }
             },
             items: [
