@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pwvault/features/settings/settings_page.dart';
 import 'package:pwvault/features/unlock/unlock_page.dart';
+import 'package:pwvault/features/unlock/vault_location.dart';
 import 'package:pwvault/services/autolock_service.dart';
 import 'package:pwvault/services/clipboard_service.dart';
 import 'package:pwvault/services/vault_service.dart';
@@ -172,7 +173,16 @@ void main() {
   ) async {
     final backend = _FakeBackend();
     await tester.pumpWidget(
-      ProviderScope(overrides: [vaultBackendProvider.overrideWithValue(backend)], child: _routerApp()),
+      ProviderScope(
+        overrides: [
+          vaultBackendProvider.overrideWithValue(backend),
+          vaultLocationProvider.overrideWith(
+            (ref) async =>
+                const VaultLocation(path: 'dir/vault.pwvault', exists: true),
+          ),
+        ],
+        child: _routerApp(),
+      ),
     );
     final container = _containerOf(tester);
     await container.read(vaultProvider.notifier).unlock('p', 'x');
