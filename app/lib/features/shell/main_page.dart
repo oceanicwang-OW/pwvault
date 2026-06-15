@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/shortcuts.dart';
+import '../../services/vault_service.dart';
 import '../detail/entry_detail_panel.dart';
+import '../list/entry_filter.dart';
 import '../list/entry_list_panel.dart';
+import '../list/list_providers.dart';
 import '../settings/settings_page.dart';
 import '../unlock/unlock_page.dart';
 
@@ -35,7 +38,10 @@ class MainPage extends ConsumerWidget {
                 drawer: compact
                     ? Drawer(
                         width: 140,
-                        child: _VaultSidebar(colorScheme: colorScheme),
+                        child: _VaultSidebar(
+                          colorScheme: colorScheme,
+                          inDrawer: true,
+                        ),
                       )
                     : null,
                 body: SafeArea(
@@ -90,13 +96,27 @@ class _CompactAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _VaultSidebar extends StatelessWidget {
-  const _VaultSidebar({required this.colorScheme});
+class _VaultSidebar extends ConsumerWidget {
+  const _VaultSidebar({required this.colorScheme, this.inDrawer = false});
 
   final ColorScheme colorScheme;
+  final bool inDrawer;
+
+  /// 选择过滤：切换视图、清空选中项，抽屉内点击后顺手收起抽屉。
+  void _choose(BuildContext context, WidgetRef ref, EntryFilter filter) {
+    ref.read(entryFilterProvider.notifier).set(filter);
+    ref.read(selectedEntryIdProvider.notifier).select(null);
+    if (inDrawer) Navigator.of(context).maybePop();
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(entryFilterProvider);
+    final allCount = ref.watch(entryListProvider).length;
+    final favCount = ref.watch(entryListProvider).where((e) => e.favorite).length;
+    final trashCount = ref.watch(trashListProvider).asData?.value.length ?? 0;
+    final tags = ref.watch(allTagsProvider);
+
     return SizedBox(
       key: const ValueKey('vault-sidebar'),
       width: 140,
@@ -114,25 +134,38 @@ class _VaultSidebar extends StatelessWidget {
               _NavRow(
                 icon: Icons.list_alt_outlined,
                 label: '全部条目',
-                count: '128',
-                selected: true,
+                count: '$allCount',
+                selected: filter is AllEntriesFilter,
                 colorScheme: colorScheme,
+                onTap: () => _choose(context, ref, const AllEntriesFilter()),
               ),
               _NavRow(
                 icon: Icons.star_border_outlined,
                 label: '常用',
+                count: favCount == 0 ? null : '$favCount',
+                selected: filter is FavoritesFilter,
                 colorScheme: colorScheme,
+                onTap: () => _choose(context, ref, const FavoritesFilter()),
               ),
               _NavRow(
                 icon: Icons.delete_outline,
                 label: '回收站',
+                count: trashCount == 0 ? null : '$trashCount',
+                selected: filter is TrashFilter,
                 colorScheme: colorScheme,
+                onTap: () => _choose(context, ref, const TrashFilter()),
               ),
-              const SizedBox(height: 12),
-              const _SectionLabel('标签'),
-              _TagRow(label: '工作', color: const Color(0xFF1D9E75)),
-              _TagRow(label: '个人', color: const Color(0xFF7F77DD)),
-              _TagRow(label: '金融', color: const Color(0xFFD85A30)),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const _SectionLabel('标签'),
+                for (final tag in tags)
+                  _TagRow(
+                    label: tag,
+                    color: _tagColor(tag),
+                    selected: filter is TagFilter && filter.tag == tag,
+                    onTap: () => _choose(context, ref, TagFilter(tag)),
+                  ),
+              ],
               const Spacer(),
               Divider(color: colorScheme.outlineVariant, height: 20),
               _NavRow(
@@ -227,34 +260,64 @@ class _NavRow extends StatelessWidget {
 }
 
 class _TagRow extends StatelessWidget {
-  const _TagRow({required this.label, required this.color});
+  const _TagRow({
+    required this.label,
+    required this.color,
+    this.selected = false,
+    this.onTap,
+  });
 
   final String label;
   final Color color;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 34),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? colorScheme.primaryContainer : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : null,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// 标签圆点取色，按标签名稳定取一档。
+Color _tagColor(String tag) {
+  const palette = <Color>[
+    Color(0xFF1D9E75),
+    Color(0xFF7F77DD),
+    Color(0xFFD85A30),
+    Color(0xFF2E7BC4),
+    Color(0xFFB0851F),
+  ];
+  return palette[tag.hashCode.abs() % palette.length];
 }
