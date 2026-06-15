@@ -11,14 +11,31 @@ class VaultLocation {
   const VaultLocation({required this.path, required this.exists});
 }
 
-/// 默认库文件位置：应用文档目录下 `pwvault/vault.pwvault`。
-///
-/// 核心解锁流程（T2.6）固定单库；多库选择器与最近库列表持久化留待后续任务。
-/// `exists` 决定解锁页进入「解锁」还是「建库」模式。
-final vaultLocationProvider = FutureProvider<VaultLocation>((ref) async {
+/// 默认库文件位置：应用文档目录下 `pwvault/vault.pwvault`（首次使用的库）。
+final defaultVaultPathProvider = FutureProvider<String>((ref) async {
   final dir = await getApplicationDocumentsDirectory();
   final vaultDir = Directory('${dir.path}/pwvault');
   await vaultDir.create(recursive: true);
-  final path = '${vaultDir.path}/vault.pwvault';
+  return '${vaultDir.path}/vault.pwvault';
+});
+
+/// 当前在解锁页选中的库路径；null 表示使用默认库。
+final selectedVaultPathProvider =
+    NotifierProvider<SelectedVaultPathNotifier, String?>(
+      SelectedVaultPathNotifier.new,
+    );
+
+class SelectedVaultPathNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String path) => state = path;
+}
+
+/// 解析出的当前库位置：选中库优先，否则默认库；`exists` 决定解锁/建库模式。
+final vaultLocationProvider = FutureProvider<VaultLocation>((ref) async {
+  final selected = ref.watch(selectedVaultPathProvider);
+  final String path = selected ??
+      await ref.watch(defaultVaultPathProvider.future);
   return VaultLocation(path: path, exists: File(path).existsSync());
 });
