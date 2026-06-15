@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/strength_bar.dart';
 import '../../services/password_gen.dart';
 import '../../services/vault_service.dart';
 import '../unlock/unlock_page.dart';
@@ -108,7 +109,7 @@ class _ChangePasswordSectionState extends ConsumerState<ChangePasswordSection> {
         _field(controller: _next, hint: '新主密码'),
         if (_strength != null) ...[
           const SizedBox(height: 8),
-          _StrengthBar(strength: _strength!, colorScheme: colorScheme),
+          PasswordStrengthBar(strength: _strength!),
         ],
         const SizedBox(height: 10),
         _field(controller: _confirm, hint: '确认新主密码'),
@@ -156,44 +157,6 @@ class _ChangePasswordSectionState extends ConsumerState<ChangePasswordSection> {
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),
-    );
-  }
-}
-
-/// 强度条：与密码生成器弹层一致的 5 档配色（T2.10）。
-class _StrengthBar extends StatelessWidget {
-  const _StrengthBar({required this.strength, required this.colorScheme});
-
-  final PasswordStrength strength;
-  final ColorScheme colorScheme;
-
-  static const _labels = ['很弱', '弱', '一般', '强', '很强'];
-
-  @override
-  Widget build(BuildContext context) {
-    final score = strength.score.clamp(0, 4);
-    final color = switch (score) {
-      0 || 1 => const Color(0xFFD64545),
-      2 => const Color(0xFFE08A1E),
-      3 => const Color(0xFF3DA35D),
-      _ => const Color(0xFF1B873F),
-    };
-    return Row(
-      children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: (score + 1) / 5,
-              minHeight: 6,
-              color: color,
-              backgroundColor: colorScheme.outlineVariant,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(_labels[score], style: TextStyle(color: color)),
-      ],
     );
   }
 }
