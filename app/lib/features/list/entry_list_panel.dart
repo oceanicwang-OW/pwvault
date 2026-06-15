@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/avatar.dart';
 import '../../services/search_index.dart';
 import '../../services/vault_service.dart';
 import '../edit/entry_edit_form.dart';
@@ -269,7 +270,6 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _avatarPalette(meta.id);
     final baseStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       color: selected ? colorScheme.onPrimaryContainer : null,
       fontWeight: FontWeight.w700,
@@ -287,10 +287,9 @@ class _ResultTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _Avatar(
+            EntryAvatar(
+              id: meta.id,
               initial: meta.title.characters.first,
-              background: palette.$1,
-              foreground: palette.$2,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -378,47 +377,3 @@ class _EmptyResults extends StatelessWidget {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.initial,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String initial;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        initial,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-/// mock 条目的色块底/字色，按 id 稳定取色。
-(Color, Color) _avatarPalette(String id) {
-  const palette = <(Color, Color)>[
-    (Color(0xFFFAECE7), Color(0xFF712B13)),
-    (Color(0xFFE1F5EE), Color(0xFF085041)),
-    (Color(0xFFFBE9E7), Color(0xFFB0341A)),
-    (Color(0xFFE8EAF6), Color(0xFF283593)),
-    (Color(0xFFE3F2E9), Color(0xFF1B5E20)),
-    (Color(0xFFF3E5F5), Color(0xFF6A1B9A)),
-  ];
-  return palette[id.hashCode.abs() % palette.length];
-}
