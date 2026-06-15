@@ -97,7 +97,7 @@ M2 桌面 UI 任务（T2.6–T2.12）已全部落地，**业务接通进行中**
 | T2.9 详情面板与密码行状态机 | 已完成（真实数据） | `40271e3`, `7ccbba4` | 通用 FieldRow、密码行状态机（8 点掩码↔明文 10s 倒计时回隐、切后台/锁定立即回隐、引用置空）、复制反馈倒计时条；选中条目驱动详情，明文走真实 `revealPassword` 单条目按需解密，编辑/改常用写真实库；未选中显示空态。 |
 | T2.10 条目编辑与密码生成器 | 已完成（真实数据） | `eb94323`, `7ccbba4` | 新建/编辑表单（标题必填、标签多选、URL 规范化、脏数据二次确认）、内嵌生成器（长度/字符集/短语+强度条）；保存写真实 `VaultService.upsert`（异步 + 提交态 + 错误提示），列表即时刷新。 |
 | T2.11 全局快捷键 | 已完成（mock） | `2b55cb2` | Ctrl/Cmd+F 搜索、Ctrl/Cmd+L 锁定、Ctrl/Cmd+N 新建、Enter 复制选中密码、↑↓ 导航；`core/shortcuts.dart` + 列表状态 provider 化，五组快捷键 widget test 全过。 |
-| T2.15 设置偏好落盘 | 已完成 | `<pending>` | 主题/自动锁定/剪贴板时长写穿到库外 `config.json`（复用 `local_config.dart`），启动时水合到运行时 provider；运行时 provider 仍为即时生效源，落盘失败降级；3 项 setter/水合/写穿 test。 |
+| T2.15 设置偏好落盘 | 已完成 | `a6633f5` | 主题/自动锁定/剪贴板时长写穿到库外 `config.json`（复用 `local_config.dart`），启动时水合到运行时 provider；运行时 provider 仍为即时生效源，落盘失败降级；3 项 setter/水合/写穿 test。 |
 | T2.14 库选择器 + 最近库持久化 | 已完成 | `95ba000` | 解锁页库选择器下拉：最近打开库列表 + 「打开其他库文件…」（file_picker）；选中库切换解锁/建库模式，成功后记录到库外 `config.json`（去重/置顶/限 8，明文不参与同步，存储不可用时降级）；新增 `services/local_config.dart`；4 项 widget/单元 test。 |
 | T2.13 侧边栏过滤 + 回收站 + 删除 | 已完成 | `e0657b8` | 侧边栏「全部/常用/标签」客户端过滤 + 实时计数与标签聚合；回收站接 `listTrash`/`restore`，详情「删除（移到回收站）」与「恢复」；过滤切换清空选中；3 项过滤/回收站 widget test。永久清空回收站待 Rust hard-delete（T5.4）。 |
 | T2.12 设置页 | 已完成 | `c52db39` | `features/settings/`：主题（系统/浅色/深色）、自动锁定时长、剪贴板清除时长接通既有内存 provider；修改主密码经 zxcvbn 强度门槛（score≥3）+ 当前密码校验，改密后立即锁定退回解锁页；侧边栏/AppBar 设置入口；7 项 widget test 全过。落盘持久化留待后续。 |
