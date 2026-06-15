@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/shortcuts.dart';
 import '../detail/entry_detail_panel.dart';
 import '../list/entry_list_panel.dart';
+import '../settings/settings_page.dart';
 import '../unlock/unlock_page.dart';
 
 /// 主界面 Shell（T2.7 / T2.11）：桌面三栏布局，窄屏折叠侧边栏，挂载全局快捷键。
@@ -75,6 +76,11 @@ class _CompactAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         IconButton(
+          tooltip: '设置',
+          icon: const Icon(Icons.settings_outlined),
+          onPressed: () => context.go(SettingsPage.path),
+        ),
+        IconButton(
           tooltip: '锁定',
           icon: const Icon(Icons.lock_outline),
           onPressed: () => context.go(UnlockPage.path),
@@ -133,6 +139,7 @@ class _VaultSidebar extends StatelessWidget {
                 icon: Icons.settings_outlined,
                 label: '设置',
                 colorScheme: colorScheme,
+                onTap: () => context.go(SettingsPage.path),
               ),
             ],
           ),
@@ -169,6 +176,7 @@ class _NavRow extends StatelessWidget {
     required this.colorScheme,
     this.count,
     this.selected = false,
+    this.onTap,
   });
 
   final IconData icon;
@@ -176,38 +184,43 @@ class _NavRow extends StatelessWidget {
   final String? count;
   final bool selected;
   final ColorScheme colorScheme;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 34),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: selected ? colorScheme.primaryContainer : Colors.transparent,
+    return Material(
+      color: selected ? colorScheme.primaryContainer : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 17, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 17, color: colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
+              if (count != null)
+                Text(
+                  count!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
-          if (count != null)
-            Text(
-              count!,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
